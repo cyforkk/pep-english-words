@@ -227,9 +227,12 @@ export default function App() {
         </div>
       )}
 
-      {/* 播放区置顶：手机首屏先用 */}
+      {/* 播放区置顶：模式三选一，控制条见底部（播放时） */}
       <section className="card">
-        <h2>开始练习</h2>
+        <h2>
+          开始练习
+          {displayWords.length > 0 && <span className="badge">{displayWords.length} 词</span>}
+        </h2>
         <div className="mode-tabs">
           <button
             type="button"
@@ -244,7 +247,7 @@ export default function App() {
             className={`btn ${mode === 'dictation' ? 'active' : ''}`}
             onPointerDown={() => unlockSpeech()}
             onClick={() => startPlay('dictation')}
-            disabled={displayWords.length === 0}
+            disabled={displayWords.length === 0 || isPlaying}
           >
             听写
           </button>
@@ -253,7 +256,7 @@ export default function App() {
             className={`btn ${mode === 'shadow' ? 'active' : ''}`}
             onPointerDown={() => unlockSpeech()}
             onClick={() => startPlay('shadow')}
-            disabled={displayWords.length === 0}
+            disabled={displayWords.length === 0 || isPlaying}
           >
             跟读
           </button>
@@ -282,79 +285,16 @@ export default function App() {
           </div>
         )}
 
-        {!showBottomBar && (
-          <div className="play-actions">
-            <button
-              type="button"
-              className="btn btn-primary span-2"
-              onPointerDown={() => unlockSpeech()}
-              onClick={() => startPlay('dictation')}
-              disabled={displayWords.length === 0}
-            >
-              开始中文听写（{displayWords.length} 词）
-            </button>
-            <button
-              type="button"
-              className="btn"
-              onPointerDown={() => unlockSpeech()}
-              onClick={() => startPlay('shadow')}
-              disabled={displayWords.length === 0}
-            >
-              英文跟读
-            </button>
-            <button
-              type="button"
-              className="btn"
-              onPointerDown={() => unlockSpeech()}
-              onClick={() => startPlay('browse')}
-            >
-              仅点读
-            </button>
-          </div>
-        )}
-
-        {showBottomBar && (
-          <div className="play-actions">
-            {status === 'playing' && (
-              <button type="button" className="btn" onClick={() => playerRef.current?.pause()}>
-                暂停
-              </button>
-            )}
-            {status === 'paused' && (
-              <button type="button" className="btn btn-primary" onClick={() => playerRef.current?.resume()}>
-                继续
-              </button>
-            )}
-            {isPlaying && (
-              <button type="button" className="btn" onClick={() => void playerRef.current?.skip()}>
-                下一词
-              </button>
-            )}
-            <button
-              type="button"
-              className={`btn btn-danger${status === 'done' ? ' span-2' : ''}`}
-              onClick={() => playerRef.current?.stop()}
-            >
-              停止
-            </button>
-            {status === 'done' && (
-              <button
-                type="button"
-                className="btn btn-primary span-2"
-                onClick={() => void startPlay(mode === 'shadow' ? 'shadow' : 'dictation')}
-              >
-                再来一遍
-              </button>
-            )}
-          </div>
-        )}
-
         <div className="status-bar">
           <span className={`status-pill ${status}`}>{statusLabel}</span>
           <span className="hint">
-            {mode === 'dictation' && '听写：念中文 → 留白默写 → 下一词'}
-            {mode === 'shadow' && '跟读：念英文，显示中文提示'}
-            {mode === 'browse' && '点读：在下方单词卡片点「英」「中」'}
+            {isPlaying || status === 'done'
+              ? '暂停 / 下一词 / 停止 → 用屏幕底部按钮'
+              : mode === 'dictation'
+                ? '听写：念中文 → 留白默写 → 下一词'
+                : mode === 'shadow'
+                  ? '跟读：念英文，显示中文提示'
+                  : '点读：在下方单词卡片点「英」「中」'}
           </span>
         </div>
       </section>
@@ -593,7 +533,7 @@ export default function App() {
               </span>
               <span>{progressText}</span>
             </div>
-            <div className="controls">
+            <div className={`controls${status === 'done' ? ' controls-done' : ''}`}>
               {status === 'playing' && (
                 <button type="button" className="btn" onClick={() => playerRef.current?.pause()}>
                   暂停
@@ -614,13 +554,13 @@ export default function App() {
                   <button
                     type="button"
                     className="btn btn-primary"
-                    style={{ gridColumn: '1 / 3' }}
-                    onClick={() => void startPlay(mode === 'shadow' ? 'shadow' : 'dictation')}
+                    onPointerDown={() => unlockSpeech()}
+                    onClick={() => startPlay(mode === 'shadow' ? 'shadow' : 'dictation')}
                   >
                     再来一遍
                   </button>
                   <button type="button" className="btn btn-danger" onClick={() => playerRef.current?.stop()}>
-                    关闭
+                    结束
                   </button>
                 </>
               ) : (

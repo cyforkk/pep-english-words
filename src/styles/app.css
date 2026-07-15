@@ -633,6 +633,10 @@ details.settings-details .settings-body {
   gap: 0.45rem;
 }
 
+.bottom-bar .controls.controls-done {
+  grid-template-columns: 1.4fr 1fr;
+}
+
 .bottom-bar .controls .btn {
   width: 100%;
   font-size: 0.9rem;
