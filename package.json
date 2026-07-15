@@ -1,7 +1,17 @@
 {
-  "name": "learn_english_pj",
-  "private": true,
+  "name": "pep2019-english-words",
+  "private": false,
   "version": "1.0.0",
+  "description": "人教版 PEP 2019 高中英语单词点读与跟读（开源）",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cyforkk/pep2019-english-words.git"
+  },
+  "homepage": "https://github.com/cyforkk/pep2019-english-words",
+  "bugs": {
+    "url": "https://github.com/cyforkk/pep2019-english-words/issues"
+  },
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",

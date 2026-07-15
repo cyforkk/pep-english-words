@@ -1,6 +1,14 @@
 # 高中英语单词 · 点读跟读
 
-轻量**纯前端**英语单词练习页：内置**人教版（PEP）2019 新教材**词库，按册/单元练习 **英文点读** 与 **英文跟读**。界面按**手机网页优先**适配。
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+[![GitHub](https://img.shields.io/badge/GitHub-pep2019--english--words-181717?logo=github)](https://github.com/cyforkk/pep2019-english-words)
+
+**开源** · 轻量纯前端英语单词练习页。
+
+内置**人教版（PEP）2019 新教材**词库，按册 / 单元做 **英文点读** 与 **英文跟读**。界面按**手机网页优先**适配，可自托管或一键部署到 Netlify。
+
+- 仓库：https://github.com/cyforkk/pep2019-english-words  
+- 欢迎 Issue / Pull Request
 
 ## 当前范围
 
@@ -27,6 +35,8 @@
 ## 快速开始
 
 ```bash
+git clone https://github.com/cyforkk/pep2019-english-words.git
+cd pep2019-english-words
 npm install
 npm run dev
 ```
@@ -60,7 +70,7 @@ npm run preview
 
 ### 方式一：Git 连接（推荐）
 
-1. 将本仓库推送到 GitHub / GitLab / Bitbucket  
+1. Fork 或直接使用本仓库：https://github.com/cyforkk/pep2019-english-words  
 2. [Netlify](https://app.netlify.com/) → **Add new site** → **Import an existing project**  
 3. 选择仓库；配置会从 `netlify.toml` 自动读取：  
    - **Build command:** `npm run build`  
@@ -148,7 +158,7 @@ Unit 1,teenager,青少年
 ## 目录结构
 
 ```
-learn_english_pj/
+pep2019-english-words/
 ├── public/data/textbooks/     # 2019 词库 JSON + index
 ├── scripts/
 │   ├── convert-pep-2019.mjs   # 2019 词库转换（使用这个）
@@ -158,8 +168,26 @@ learn_english_pj/
 │   ├── components/
 │   ├── lib/                   # tts、播放队列、导入、存储
 │   └── types/
-└── docs/                      # 词库说明、bug 记录、方案归档
+├── docs/                      # 词库说明、bug 记录、方案归档
+├── netlify.toml
+└── LICENSE                    # MIT
 ```
+
+## 参与贡献
+
+本项目**开源**，欢迎贡献代码、文档与词库边界修订：
+
+1. Fork 本仓库  
+2. 新建分支：`git checkout -b feature/your-change`  
+3. 提交并推送后发起 Pull Request  
+
+也可直接提 [Issue](https://github.com/cyforkk/pep2019-english-words/issues) 反馈问题或建议。
+
+开发约定简述：
+
+- 代码改动尽量小而聚焦  
+- 功能 / bug 修复可按项目习惯补充 `docs/` 说明  
+- 词库边界修改请改 `scripts/convert-pep-2019.mjs` 后重新转换  
 
 ## 文档
 
@@ -177,8 +205,14 @@ learn_english_pj/
 
 ## 版权说明
 
-内置词库转换自社区整理的人教 2019 词表 xlsx，**仅供个人学习使用**；请勿当作官方教材资源再分发。版权归人民教育出版社等权利人所有。
+- **本仓库软件代码**（应用、脚本、文档中的原创部分）：见下方 **MIT 许可证**，可自由使用、修改与再分发。  
+- **内置词库数据**：转换自社区整理的人教 2019 词表 xlsx，**教材与词表版权归人民教育出版社等权利人**。数据仅供学习与本工具演示；再分发或商用请自行评估合规，勿当作官方授权词库。  
+- 第三方开源组件各自遵循其原许可证。
 
 ## 许可证
 
-私有项目（`private: true`）。
+本项目源代码采用 [**MIT License**](./LICENSE) 开源发布。
+
+```
+MIT License — 详见仓库根目录 LICENSE 文件
+```
