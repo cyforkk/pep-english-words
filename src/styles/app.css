@@ -112,6 +112,20 @@ input[type='number']::-webkit-inner-spin-button {
   vertical-align: middle;
 }
 
+.card h2 .badge-shuffle {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.list-actions {
+  margin: 0 0 0.75rem;
+}
+
+.list-actions .btn {
+  flex: 1 1 auto;
+  min-width: 6.5rem;
+}
+
 .row {
   display: flex;
   flex-wrap: wrap;

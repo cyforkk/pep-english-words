@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { SpeakButton } from './components/SpeakButton'
 import { parseTextbookFile } from './lib/import'
-import { WordPlayer } from './lib/queue'
+import { shuffleArray, WordPlayer } from './lib/queue'
 import {
   loadImportedTextbooks,
   loadSettings,
@@ -9,7 +9,7 @@ import {
   saveSettings,
   upsertImportedTextbook,
 } from './lib/storage'
-import { ensureVoicesLoaded, hasVoiceFor } from './lib/tts'
+import { ensureVoicesLoaded, isMobileClient, unlockSpeech } from './lib/tts'
 import type { PlayMode, PlayerSettings, PlayerStatus, Textbook, Word } from './types/textbook'
 import { DEFAULT_SETTINGS } from './types/textbook'
 
@@ -40,10 +40,34 @@ export default function App() {
 
   const textbook = allBooks.find((b) => b.id === textbookId) ?? null
 
+  /** 教材单元合并后的原始顺序（未打乱） */
   const selectedWords = useMemo(() => {
     if (!textbook) return [] as Word[]
     return textbook.units.filter((u) => selectedUnits.includes(u.id)).flatMap((u) => u.words)
   }, [textbook, selectedUnits])
+
+  /** 界面展示 / 听写跟读实际使用的顺序 */
+  const [displayWords, setDisplayWords] = useState<Word[]>([])
+  const [listShuffled, setListShuffled] = useState(false)
+
+  // 单元或教材变化时，同步列表并恢复原始顺序
+  useEffect(() => {
+    setDisplayWords(selectedWords)
+    setListShuffled(false)
+  }, [selectedWords])
+
+  const shuffleWordList = () => {
+    if (selectedWords.length < 2) return
+    playerRef.current?.stop()
+    setDisplayWords(shuffleArray(selectedWords))
+    setListShuffled(true)
+  }
+
+  const restoreWordListOrder = () => {
+    playerRef.current?.stop()
+    setDisplayWords(selectedWords)
+    setListShuffled(false)
+  }
 
   useEffect(() => {
     fetch('/data/textbooks/demo-pep-sample.json')
@@ -66,20 +90,27 @@ export default function App() {
     setSelectedUnits(textbook.units.map((u) => u.id))
   }, [textbookId]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 任意触摸/点击都尝试解锁共享 Audio（听写连续播放依赖此解锁）
   useEffect(() => {
-    void ensureVoicesLoaded().then(() => {
-      const zh = hasVoiceFor('zh-CN')
-      const en = hasVoiceFor('en-US')
-      if (!zh && !en) {
-        setVoiceWarn('未检测到系统语音。手机请在系统设置中安装中文/英文语音引擎。')
-      } else if (!zh) {
-        setVoiceWarn('未检测到中文语音。听写需要中文 TTS，请在手机系统设置中安装中文语音包。')
-      } else if (!en) {
-        setVoiceWarn('未检测到英文语音。跟读与英文点读可能异常，请安装英文语音包。')
-      } else {
-        setVoiceWarn(null)
-      }
-    })
+    const unlock = () => unlockSpeech()
+    // capture 阶段尽早执行
+    document.addEventListener('touchstart', unlock, { passive: true, capture: true })
+    document.addEventListener('pointerdown', unlock, { passive: true, capture: true })
+    document.addEventListener('click', unlock, true)
+    return () => {
+      document.removeEventListener('touchstart', unlock, true)
+      document.removeEventListener('pointerdown', unlock, true)
+      document.removeEventListener('click', unlock, true)
+    }
+  }, [])
+
+  useEffect(() => {
+    void ensureVoicesLoaded()
+    if (isMobileClient()) {
+      setVoiceWarn(
+        '手机发音走在线语音（需联网）。请关静音、调高媒体音量；建议用 Safari/Chrome 打开。若失败请再点一次「英/中」。',
+      )
+    }
   }, [])
 
   useEffect(() => {
@@ -118,18 +149,21 @@ export default function App() {
 
   const clearUnits = () => setSelectedUnits([])
 
-  const startPlay = async (playMode: PlayMode) => {
+  const startPlay = (playMode: PlayMode) => {
     setError(null)
+    // 必须在点击同步路径解锁，听写循环才能继续 play
+    unlockSpeech()
     setMode(playMode)
     if (playMode === 'browse') {
       playerRef.current?.stop()
       return
     }
-    if (selectedWords.length === 0) {
+    if (displayWords.length === 0) {
       setError('请先勾选至少一个单元')
       return
     }
-    await playerRef.current?.start(selectedWords, playMode)
+    // 按当前列表顺序播放（若已点「打乱」则用打乱后的顺序）
+    void playerRef.current?.start(displayWords, playMode)
   }
 
   const onImport = async (file: File | null) => {
@@ -176,8 +210,22 @@ export default function App() {
       </header>
 
       {loadError && <div className="alert alert-error">{loadError}</div>}
-      {voiceWarn && <div className="alert alert-warn">{voiceWarn}</div>}
-      {error && <div className="alert alert-error">{error}</div>}
+      {voiceWarn && (
+        <div className="alert alert-info" role="status">
+          <span>{voiceWarn}</span>
+          <button type="button" className="btn btn-sm" style={{ marginLeft: '0.5rem' }} onClick={() => setVoiceWarn(null)}>
+            知道了
+          </button>
+        </div>
+      )}
+      {error && (
+        <div className="alert alert-error">
+          {error}
+          <button type="button" className="btn btn-sm" style={{ marginLeft: '0.5rem' }} onClick={() => setError(null)}>
+            关闭
+          </button>
+        </div>
+      )}
 
       {/* 播放区置顶：手机首屏先用 */}
       <section className="card">
@@ -186,23 +234,26 @@ export default function App() {
           <button
             type="button"
             className={`btn ${mode === 'browse' && !isPlaying ? 'active' : ''}`}
-            onClick={() => void startPlay('browse')}
+            onPointerDown={() => unlockSpeech()}
+            onClick={() => startPlay('browse')}
           >
             点读
           </button>
           <button
             type="button"
             className={`btn ${mode === 'dictation' ? 'active' : ''}`}
-            onClick={() => void startPlay('dictation')}
-            disabled={selectedWords.length === 0}
+            onPointerDown={() => unlockSpeech()}
+            onClick={() => startPlay('dictation')}
+            disabled={displayWords.length === 0}
           >
             听写
           </button>
           <button
             type="button"
             className={`btn ${mode === 'shadow' ? 'active' : ''}`}
-            onClick={() => void startPlay('shadow')}
-            disabled={selectedWords.length === 0}
+            onPointerDown={() => unlockSpeech()}
+            onClick={() => startPlay('shadow')}
+            disabled={displayWords.length === 0}
           >
             跟读
           </button>
@@ -236,20 +287,27 @@ export default function App() {
             <button
               type="button"
               className="btn btn-primary span-2"
-              onClick={() => void startPlay('dictation')}
-              disabled={selectedWords.length === 0}
+              onPointerDown={() => unlockSpeech()}
+              onClick={() => startPlay('dictation')}
+              disabled={displayWords.length === 0}
             >
-              开始中文听写（{selectedWords.length} 词）
+              开始中文听写（{displayWords.length} 词）
             </button>
             <button
               type="button"
               className="btn"
-              onClick={() => void startPlay('shadow')}
-              disabled={selectedWords.length === 0}
+              onPointerDown={() => unlockSpeech()}
+              onClick={() => startPlay('shadow')}
+              disabled={displayWords.length === 0}
             >
               英文跟读
             </button>
-            <button type="button" className="btn" onClick={() => void startPlay('browse')}>
+            <button
+              type="button"
+              className="btn"
+              onPointerDown={() => unlockSpeech()}
+              onClick={() => startPlay('browse')}
+            >
               仅点读
             </button>
           </div>
@@ -428,7 +486,7 @@ export default function App() {
                 checked={settings.shuffle}
                 onChange={(e) => patchSettings({ shuffle: e.target.checked })}
               />
-              打乱顺序
+              开始听写/跟读时再随机
             </label>
             <label className="field inline">
               <input
@@ -454,33 +512,69 @@ export default function App() {
       <section className="card">
         <h2>
           单词列表
-          <span className="badge">{selectedWords.length}</span>
+          <span className="badge">{displayWords.length}</span>
+          {listShuffled && <span className="badge badge-shuffle">已打乱</span>}
         </h2>
-        {selectedWords.length === 0 ? (
+        {displayWords.length === 0 ? (
           <p className="hint">请勾选单元以显示单词。</p>
         ) : (
-          <div className="word-cards">
-            {selectedWords.map((w, i) => {
-              const isCurrent =
-                isPlaying && currentWord && currentWord.en === w.en && currentWord.zh === w.zh
-              return (
-                <div key={`${w.en}-${w.zh}-${i}`} className={`word-card${isCurrent ? ' current' : ''}`}>
-                  <div className="meta">
-                    <div className="idx">#{i + 1}</div>
-                    <div className={`en${hideEn && isCurrent ? ' hidden-en' : ''}`}>
-                      {hideEn && isCurrent ? '••••' : w.en}
+          <>
+            <div className="toolbar-inline list-actions">
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={shuffleWordList}
+                disabled={displayWords.length < 2 || isPlaying}
+              >
+                打乱单词
+              </button>
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={restoreWordListOrder}
+                disabled={!listShuffled || isPlaying}
+              >
+                恢复顺序
+              </button>
+              <span className="hint">
+                {listShuffled ? '当前为随机顺序，听写/跟读按此列表播放' : '当前为教材原顺序'}
+              </span>
+            </div>
+            <div className="word-cards">
+              {displayWords.map((w, i) => {
+                const isCurrent =
+                  isPlaying && currentWord && currentWord.en === w.en && currentWord.zh === w.zh
+                return (
+                  <div key={`${w.en}-${w.zh}-${i}`} className={`word-card${isCurrent ? ' current' : ''}`}>
+                    <div className="meta">
+                      <div className="idx">#{i + 1}</div>
+                      <div className={`en${hideEn && isCurrent ? ' hidden-en' : ''}`}>
+                        {hideEn && isCurrent ? '••••' : w.en}
+                      </div>
+                      {w.phonetic && <div className="phonetic">{w.phonetic}</div>}
+                      <div className="zh">{w.zh}</div>
                     </div>
-                    {w.phonetic && <div className="phonetic">{w.phonetic}</div>}
-                    <div className="zh">{w.zh}</div>
+                    <div className="speak-pair">
+                      <SpeakButton
+                        text={w.en}
+                        lang="en-US"
+                        rate={settings.rate}
+                        label="英"
+                        onError={setError}
+                      />
+                      <SpeakButton
+                        text={w.zh}
+                        lang="zh-CN"
+                        rate={settings.rate}
+                        label="中"
+                        onError={setError}
+                      />
+                    </div>
                   </div>
-                  <div className="speak-pair">
-                    <SpeakButton text={w.en} lang="en-US" rate={settings.rate} label="英" />
-                    <SpeakButton text={w.zh} lang="zh-CN" rate={settings.rate} label="中" />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+                )
+              })}
+            </div>
+          </>
         )}
       </section>
 
