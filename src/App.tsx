@@ -10,11 +10,18 @@ import {
   upsertImportedTextbook,
 } from './lib/storage'
 import { ensureVoicesLoaded, isMobileClient, unlockSpeech } from './lib/tts'
-import type { PlayMode, PlayerSettings, PlayerStatus, Textbook, Word } from './types/textbook'
+import type {
+  PlayMode,
+  PlayerSettings,
+  PlayerStatus,
+  Textbook,
+  TextbookIndex,
+  Word,
+} from './types/textbook'
 import { DEFAULT_SETTINGS } from './types/textbook'
 
 export default function App() {
-  const [builtin, setBuiltin] = useState<Textbook | null>(null)
+  const [catalog, setCatalog] = useState<Textbook[]>([])
   const [imported, setImported] = useState<Textbook[]>(() => loadImportedTextbooks())
   const [textbookId, setTextbookId] = useState<string>('')
   const [selectedUnits, setSelectedUnits] = useState<string[]>([])
@@ -27,30 +34,28 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
   const [voiceWarn, setVoiceWarn] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadingBooks, setLoadingBooks] = useState(true)
 
   const playerRef = useRef<WordPlayer | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const allBooks = useMemo(() => {
-    const list: Textbook[] = []
-    if (builtin) list.push(builtin)
-    list.push(...imported)
-    return list
-  }, [builtin, imported])
+    const map = new Map<string, Textbook>()
+    for (const b of catalog) map.set(b.id, b)
+    for (const b of imported) map.set(b.id, b)
+    return [...map.values()]
+  }, [catalog, imported])
 
   const textbook = allBooks.find((b) => b.id === textbookId) ?? null
 
-  /** 教材单元合并后的原始顺序（未打乱） */
   const selectedWords = useMemo(() => {
     if (!textbook) return [] as Word[]
     return textbook.units.filter((u) => selectedUnits.includes(u.id)).flatMap((u) => u.words)
   }, [textbook, selectedUnits])
 
-  /** 界面展示 / 听写跟读实际使用的顺序 */
   const [displayWords, setDisplayWords] = useState<Word[]>([])
   const [listShuffled, setListShuffled] = useState(false)
 
-  // 单元或教材变化时，同步列表并恢复原始顺序
   useEffect(() => {
     setDisplayWords(selectedWords)
     setListShuffled(false)
@@ -69,31 +74,48 @@ export default function App() {
     setListShuffled(false)
   }
 
+  // 加载人教高中内置词库 index + 各册
   useEffect(() => {
-    fetch('/data/textbooks/demo-pep-sample.json')
+    let cancelled = false
+    setLoadingBooks(true)
+    fetch('/data/textbooks/index.json')
       .then((r) => {
-        if (!r.ok) throw new Error(`加载示例教材失败: ${r.status}`)
-        return r.json() as Promise<Textbook>
+        if (!r.ok) throw new Error(`加载词库索引失败: ${r.status}`)
+        return r.json() as Promise<TextbookIndex>
       })
-      .then((book) => {
-        setBuiltin(book)
-        setTextbookId((id) => id || book.id)
-        setSelectedUnits((prev) => (prev.length ? prev : book.units.map((u) => u.id)))
+      .then(async (idx) => {
+        const books: Textbook[] = []
+        for (const item of idx.books) {
+          const res = await fetch(`/data/textbooks/${item.id}.json`)
+          if (!res.ok) continue
+          const book = (await res.json()) as Textbook
+          books.push(book)
+        }
+        if (cancelled) return
+        if (books.length === 0) throw new Error('词库为空，请检查 public/data/textbooks')
+        setCatalog(books)
+        setTextbookId((id) => id || books[0].id)
+        setLoadingBooks(false)
       })
       .catch((e: unknown) => {
-        setLoadError(e instanceof Error ? e.message : String(e))
+        if (!cancelled) {
+          setLoadError(e instanceof Error ? e.message : String(e))
+          setLoadingBooks(false)
+        }
       })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
+  // 切换教材时默认不勾选任何单元（需用户自选或点「全选」）
   useEffect(() => {
     if (!textbook) return
-    setSelectedUnits(textbook.units.map((u) => u.id))
+    setSelectedUnits([])
   }, [textbookId]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 任意触摸/点击都尝试解锁共享 Audio（听写连续播放依赖此解锁）
   useEffect(() => {
     const unlock = () => unlockSpeech()
-    // capture 阶段尽早执行
     document.addEventListener('touchstart', unlock, { passive: true, capture: true })
     document.addEventListener('pointerdown', unlock, { passive: true, capture: true })
     document.addEventListener('click', unlock, true)
@@ -107,9 +129,7 @@ export default function App() {
   useEffect(() => {
     void ensureVoicesLoaded()
     if (isMobileClient()) {
-      setVoiceWarn(
-        '手机发音走在线语音（需联网）。请关静音、调高媒体音量；建议用 Safari/Chrome 打开。若失败请再点一次「英/中」。',
-      )
+      setVoiceWarn('英文发音需联网（有道）。请关静音、调高媒体音量；建议 Safari/Chrome。')
     }
   }, [])
 
@@ -151,7 +171,6 @@ export default function App() {
 
   const startPlay = (playMode: PlayMode) => {
     setError(null)
-    // 必须在点击同步路径解锁，听写循环才能继续 play
     unlockSpeech()
     setMode(playMode)
     if (playMode === 'browse') {
@@ -162,7 +181,6 @@ export default function App() {
       setError('请先勾选至少一个单元')
       return
     }
-    // 按当前列表顺序播放（若已点「打乱」则用打乱后的顺序）
     void playerRef.current?.start(displayWords, playMode)
   }
 
@@ -180,17 +198,16 @@ export default function App() {
   }
 
   const onRemoveImported = () => {
-    if (!textbook || textbook.id === builtin?.id) return
+    if (!textbook || catalog.some((b) => b.id === textbook.id)) return
     if (!confirm(`删除导入教材「${textbook.title}」？`)) return
     const list = removeImportedTextbook(textbook.id)
     setImported(list)
-    setTextbookId(builtin?.id ?? list[0]?.id ?? '')
+    setTextbookId(catalog[0]?.id ?? list[0]?.id ?? '')
   }
 
   const isPlaying = status === 'playing' || status === 'paused'
   const showBottomBar = isPlaying || status === 'done'
-  const hideEn =
-    mode === 'dictation' && settings.hideEnInDictation && (status === 'playing' || status === 'paused')
+  const isImported = textbook != null && !catalog.some((b) => b.id === textbook.id)
 
   const statusLabel =
     status === 'playing' ? '播放中' : status === 'paused' ? '已暂停' : status === 'done' ? '已结束' : '空闲'
@@ -205,10 +222,11 @@ export default function App() {
   return (
     <div className={`app${showBottomBar ? ' has-bottom-bar' : ''}`}>
       <header className="header">
-        <h1>单词听写 · 跟读</h1>
-        <p className="sub">手机点选教材单元 · 中英点读 · 听写默写 · 英文跟读</p>
+        <h1>高中英语单词 · 点读跟读</h1>
+        <p className="sub">人教版高中词库 · 选单元 · 英文点读 · 跟读练习 · 可打乱</p>
       </header>
 
+      {loadingBooks && <div className="alert alert-info">正在加载词库…</div>}
       {loadError && <div className="alert alert-error">{loadError}</div>}
       {voiceWarn && (
         <div className="alert alert-info" role="status">
@@ -227,13 +245,12 @@ export default function App() {
         </div>
       )}
 
-      {/* 播放区置顶：模式三选一，控制条见底部（播放时） */}
       <section className="card">
         <h2>
           开始练习
           {displayWords.length > 0 && <span className="badge">{displayWords.length} 词</span>}
         </h2>
-        <div className="mode-tabs">
+        <div className="mode-tabs mode-tabs-2">
           <button
             type="button"
             className={`btn ${mode === 'browse' && !isPlaying ? 'active' : ''}`}
@@ -241,15 +258,6 @@ export default function App() {
             onClick={() => startPlay('browse')}
           >
             点读
-          </button>
-          <button
-            type="button"
-            className={`btn ${mode === 'dictation' ? 'active' : ''}`}
-            onPointerDown={() => unlockSpeech()}
-            onClick={() => startPlay('dictation')}
-            disabled={displayWords.length === 0 || isPlaying}
-          >
-            听写
           </button>
           <button
             type="button"
@@ -262,26 +270,15 @@ export default function App() {
           </button>
         </div>
 
-        {(mode === 'dictation' || mode === 'shadow') && (isPlaying || status === 'done') && (
+        {mode === 'shadow' && (isPlaying || status === 'done') && (
           <div className="current-word-panel">
             <div className="idx">
               {status === 'done' ? `完成 ${queueLen} 词` : `第 ${progressText} 词`}
             </div>
-            {mode === 'dictation' ? (
-              <>
-                <div className="zh-big">{currentWord?.zh ?? (status === 'done' ? '✓' : '…')}</div>
-                <div className={hideEn ? 'en-hidden' : 'en-big'}>
-                  {hideEn ? '英文已隐藏 · 请纸笔默写' : (currentWord?.en ?? '')}
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="en-big">{currentWord?.en ?? (status === 'done' ? '✓' : '…')}</div>
-                <div className="zh-big" style={{ fontSize: '1.15rem', fontWeight: 600 }}>
-                  {currentWord?.zh ?? ''}
-                </div>
-              </>
-            )}
+            <div className="en-big">{currentWord?.en ?? (status === 'done' ? '✓' : '…')}</div>
+            <div className="zh-big" style={{ fontSize: '1.1rem', fontWeight: 600 }}>
+              {currentWord?.zh ?? ''}
+            </div>
           </div>
         )}
 
@@ -289,12 +286,10 @@ export default function App() {
           <span className={`status-pill ${status}`}>{statusLabel}</span>
           <span className="hint">
             {isPlaying || status === 'done'
-              ? '暂停 / 下一词 / 停止 → 用屏幕底部按钮'
-              : mode === 'dictation'
-                ? '听写：念中文 → 留白默写 → 下一词'
-                : mode === 'shadow'
-                  ? '跟读：念英文，显示中文提示'
-                  : '点读：在下方单词卡片点「英」「中」'}
+              ? '暂停 / 下一词 / 停止 → 屏幕底部'
+              : mode === 'shadow'
+                ? '跟读：自动念英文，可看中文释义'
+                : '点读：在单词卡片点「英」发音'}
           </span>
         </div>
       </section>
@@ -305,6 +300,7 @@ export default function App() {
           教材
           <select
             value={textbookId}
+            disabled={loadingBooks || allBooks.length === 0}
             onChange={(e) => {
               playerRef.current?.stop()
               setTextbookId(e.target.value)
@@ -313,7 +309,7 @@ export default function App() {
             {allBooks.map((b) => (
               <option key={b.id} value={b.id}>
                 {b.title}
-                {builtin && b.id !== builtin.id ? '（导入）' : ''}
+                {isImportedBook(b.id, catalog) ? '（导入）' : ''}
               </option>
             ))}
           </select>
@@ -333,13 +329,13 @@ export default function App() {
               e.target.value = ''
             }}
           />
-          {textbook && builtin && textbook.id !== builtin.id && (
+          {isImported && (
             <button type="button" className="btn btn-danger" onClick={onRemoveImported}>
               删除导入
             </button>
           )}
         </div>
-        <p className="hint">支持 JSON / CSV（unit,en,zh）。CSV 请用 UTF-8。</p>
+        <p className="hint">内置人教版（2019）必修 + 选择性必修。也可导入 JSON/CSV（unit,en,zh）。</p>
 
         {textbook && (
           <>
@@ -372,7 +368,7 @@ export default function App() {
       </section>
 
       <details className="settings-details">
-        <summary>语速 / 遍数 / 间隔</summary>
+        <summary>语速 / 跟读遍数 / 间隔</summary>
         <div className="settings-body">
           <div className="settings-grid">
             <label className="field span-2">
@@ -387,17 +383,6 @@ export default function App() {
               />
             </label>
             <label className="field">
-              中文遍数
-              <input
-                type="number"
-                min={1}
-                max={10}
-                inputMode="numeric"
-                value={settings.repeatZh}
-                onChange={(e) => patchSettings({ repeatZh: Math.max(1, Number(e.target.value) || 1) })}
-              />
-            </label>
-            <label className="field">
               英文遍数
               <input
                 type="number"
@@ -408,7 +393,7 @@ export default function App() {
                 onChange={(e) => patchSettings({ repeatEn: Math.max(1, Number(e.target.value) || 1) })}
               />
             </label>
-            <label className="field span-2">
+            <label className="field">
               词间隔（毫秒）
               <input
                 type="number"
@@ -420,24 +405,16 @@ export default function App() {
                 onChange={(e) => patchSettings({ gapMs: Math.max(0, Number(e.target.value) || 0) })}
               />
             </label>
-            <label className="field inline">
+            <label className="field inline span-2">
               <input
                 type="checkbox"
                 checked={settings.shuffle}
                 onChange={(e) => patchSettings({ shuffle: e.target.checked })}
               />
-              开始听写/跟读时再随机
-            </label>
-            <label className="field inline">
-              <input
-                type="checkbox"
-                checked={settings.hideEnInDictation}
-                onChange={(e) => patchSettings({ hideEnInDictation: e.target.checked })}
-              />
-              听写隐藏英文
+              开始跟读时再随机
             </label>
           </div>
-          <p className="hint">设置自动保存。默认语速 0.9 · 中文 2 遍 · 间隔 3 秒。</p>
+          <p className="hint">设置自动保存。跟读按当前单词列表顺序（可先打乱列表）。</p>
           <button
             type="button"
             className="btn btn-sm"
@@ -477,7 +454,7 @@ export default function App() {
                 恢复顺序
               </button>
               <span className="hint">
-                {listShuffled ? '当前为随机顺序，听写/跟读按此列表播放' : '当前为教材原顺序'}
+                {listShuffled ? '当前为随机顺序' : '当前为词库顺序'}
               </span>
             </div>
             <div className="word-cards">
@@ -488,9 +465,7 @@ export default function App() {
                   <div key={`${w.en}-${w.zh}-${i}`} className={`word-card${isCurrent ? ' current' : ''}`}>
                     <div className="meta">
                       <div className="idx">#{i + 1}</div>
-                      <div className={`en${hideEn && isCurrent ? ' hidden-en' : ''}`}>
-                        {hideEn && isCurrent ? '••••' : w.en}
-                      </div>
+                      <div className="en">{w.en}</div>
                       {w.phonetic && <div className="phonetic">{w.phonetic}</div>}
                       <div className="zh">{w.zh}</div>
                     </div>
@@ -502,13 +477,6 @@ export default function App() {
                         label="英"
                         onError={setError}
                       />
-                      <SpeakButton
-                        text={w.zh}
-                        lang="zh-CN"
-                        rate={settings.rate}
-                        label="中"
-                        onError={setError}
-                      />
                     </div>
                   </div>
                 )
@@ -518,18 +486,12 @@ export default function App() {
         )}
       </section>
 
-      {/* 底部拇指操作条：播放中固定在屏幕下方 */}
       {showBottomBar && (
         <div className="bottom-bar" role="toolbar" aria-label="播放控制">
           <div className="bottom-bar-inner">
             <div className="mini-status">
               <span>
-                {mode === 'dictation' ? '听写' : mode === 'shadow' ? '跟读' : '点读'} ·{' '}
-                <strong>
-                  {mode === 'dictation'
-                    ? (currentWord?.zh ?? (status === 'done' ? '完成' : '…'))
-                    : (currentWord?.en ?? (status === 'done' ? '完成' : '…'))}
-                </strong>
+                跟读 · <strong>{currentWord?.en ?? (status === 'done' ? '完成' : '…')}</strong>
               </span>
               <span>{progressText}</span>
             </div>
@@ -555,7 +517,7 @@ export default function App() {
                     type="button"
                     className="btn btn-primary"
                     onPointerDown={() => unlockSpeech()}
-                    onClick={() => startPlay(mode === 'shadow' ? 'shadow' : 'dictation')}
+                    onClick={() => startPlay('shadow')}
                   >
                     再来一遍
                   </button>
@@ -574,4 +536,8 @@ export default function App() {
       )}
     </div>
   )
+}
+
+function isImportedBook(id: string, catalog: Textbook[]) {
+  return !catalog.some((b) => b.id === id)
 }

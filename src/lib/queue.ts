@@ -23,14 +23,13 @@ export function buildQueue(words: Word[], shuffle: boolean): Word[] {
 }
 
 /**
- * 听写/跟读播放状态机。
- * 听写：中文 × repeatZh → gap → 下一词
- * 跟读：英文 × repeatEn → gap → 下一词
+ * 跟读播放状态机：英文 × repeatEn → gap → 下一词
+ * （听写/中文朗读已从产品范围移除）
  */
 export class WordPlayer {
   private queue: Word[] = []
   private index = 0
-  private mode: PlayMode = 'dictation'
+  private mode: PlayMode = 'shadow'
   private settings: PlayerSettings
   private callbacks: QueueCallbacks
   private status: 'idle' | 'playing' | 'paused' | 'done' = 'idle'
@@ -132,18 +131,7 @@ export class WordPlayer {
       this.emitIndex()
 
       try {
-        if (this.mode === 'dictation') {
-          const n = Math.max(1, this.settings.repeatZh)
-          for (let i = 0; i < n; i++) {
-            if (this.forceNext) break
-            await this.waitIfPaused()
-            if (this.aborted || token !== this.runToken) return
-            if (this.forceNext) break
-            await speak(word.zh, { lang: 'zh-CN', rate: this.settings.rate })
-            if (this.aborted || token !== this.runToken) return
-            if (this.forceNext) break
-          }
-        } else if (this.mode === 'shadow') {
+        if (this.mode === 'shadow') {
           const n = Math.max(1, this.settings.repeatEn)
           for (let i = 0; i < n; i++) {
             if (this.forceNext) break

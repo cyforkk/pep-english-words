@@ -1,0 +1,2 @@
+# Netlify SPA 回退（与 netlify.toml redirects 二选一即可，双写更稳妥）
+/*    /index.html   200

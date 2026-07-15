@@ -259,12 +259,16 @@ input[type='range'] {
   background: #fffbeb;
 }
 
-/* 模式三等分，大拇指好点 */
+/* 模式按钮 */
 .mode-tabs {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: 0.4rem;
   margin-bottom: 0.75rem;
+}
+
+.mode-tabs.mode-tabs-2 {
+  grid-template-columns: 1fr 1fr;
 }
 
 .mode-tabs .btn {

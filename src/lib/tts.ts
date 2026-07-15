@@ -487,7 +487,7 @@ export async function speak(text: string, options: SpeakOptions): Promise<void> 
         '无法播放语音。',
         errors.join(' | '),
         '请：①确认联网 ②关静音、调高媒体音量 ③用系统 Safari/Chrome（不要用微信内打开）',
-        '④先点一次页面任意处，再点「英」或「中」',
+        '④先点一次页面任意处，再点「英」',
       ].join(''),
     )
   }

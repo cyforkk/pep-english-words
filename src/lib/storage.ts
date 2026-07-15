@@ -39,7 +39,12 @@ export function loadSettings(): PlayerSettings {
     const raw = localStorage.getItem(SETTINGS_KEY)
     if (!raw) return { ...DEFAULT_SETTINGS }
     const data = JSON.parse(raw) as Partial<PlayerSettings>
-    return { ...DEFAULT_SETTINGS, ...data }
+    return {
+      rate: data.rate ?? DEFAULT_SETTINGS.rate,
+      repeatEn: data.repeatEn ?? DEFAULT_SETTINGS.repeatEn,
+      gapMs: data.gapMs ?? DEFAULT_SETTINGS.gapMs,
+      shuffle: data.shuffle ?? DEFAULT_SETTINGS.shuffle,
+    }
   } catch {
     return { ...DEFAULT_SETTINGS }
   }

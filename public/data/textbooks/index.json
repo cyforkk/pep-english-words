@@ -1,0 +1,49 @@
+{
+  "description": "人教版（PEP）2019 高中英语词库（含预备单元）",
+  "edition": "2019",
+  "generatedAt": "2026-07-15T17:01:16.289Z",
+  "books": [
+    {
+      "id": "pep2019-compulsory-1",
+      "title": "人教版高中英语（2019）· 必修第一册",
+      "words": 387,
+      "units": 6
+    },
+    {
+      "id": "pep2019-compulsory-2",
+      "title": "人教版高中英语（2019）· 必修第二册",
+      "words": 407,
+      "units": 5
+    },
+    {
+      "id": "pep2019-compulsory-3",
+      "title": "人教版高中英语（2019）· 必修第三册",
+      "words": 471,
+      "units": 5
+    },
+    {
+      "id": "pep2019-optional-1",
+      "title": "人教版高中英语（2019）· 选择性必修第一册",
+      "words": 379,
+      "units": 5
+    },
+    {
+      "id": "pep2019-optional-2",
+      "title": "人教版高中英语（2019）· 选择性必修第二册",
+      "words": 382,
+      "units": 5
+    },
+    {
+      "id": "pep2019-optional-3",
+      "title": "人教版高中英语（2019）· 选择性必修第三册",
+      "words": 357,
+      "units": 5
+    },
+    {
+      "id": "pep2019-optional-4",
+      "title": "人教版高中英语（2019）· 选择性必修第四册",
+      "words": 348,
+      "units": 5
+    }
+  ]
+}

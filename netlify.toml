@@ -1,0 +1,37 @@
+# Netlify 部署配置 — Vite + React 静态站
+# 文档: https://docs.netlify.com/configure-builds/file-based-configuration/
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# 与本地开发一致，避免 Node 版本过旧导致 Vite 8 构建失败
+[build.environment]
+  NODE_VERSION = "22"
+  NPM_FLAGS = "--no-fund --no-audit"
+
+# 单页应用：刷新任意路径都回 index.html（当前无路由也建议保留）
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# 词库 JSON：可协商缓存，更新部署后会换文件路径或需重新拉取
+[[headers]]
+  for = "/data/*"
+  [headers.values]
+    Cache-Control = "public, max-age=3600, must-revalidate"
+
+# 带 hash 的构建产物长期缓存
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# 安全与基础头
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
