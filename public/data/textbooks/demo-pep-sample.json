@@ -1,0 +1,48 @@
+{
+  "id": "demo-pep-sample",
+  "title": "示例教材 · 入门单词（演示）",
+  "units": [
+    {
+      "id": "u1",
+      "title": "Unit 1 · Greetings",
+      "words": [
+        { "en": "hello", "zh": "你好", "phonetic": "/həˈləʊ/" },
+        { "en": "hi", "zh": "嗨", "phonetic": "/haɪ/" },
+        { "en": "goodbye", "zh": "再见", "phonetic": "/ˌɡʊdˈbaɪ/" },
+        { "en": "thanks", "zh": "谢谢", "phonetic": "/θæŋks/" },
+        { "en": "please", "zh": "请", "phonetic": "/pliːz/" },
+        { "en": "sorry", "zh": "对不起", "phonetic": "/ˈsɒri/" },
+        { "en": "name", "zh": "名字", "phonetic": "/neɪm/" },
+        { "en": "friend", "zh": "朋友", "phonetic": "/frend/" }
+      ]
+    },
+    {
+      "id": "u2",
+      "title": "Unit 2 · School",
+      "words": [
+        { "en": "book", "zh": "书", "phonetic": "/bʊk/" },
+        { "en": "pen", "zh": "钢笔", "phonetic": "/pen/" },
+        { "en": "pencil", "zh": "铅笔", "phonetic": "/ˈpensl/" },
+        { "en": "desk", "zh": "课桌", "phonetic": "/desk/" },
+        { "en": "teacher", "zh": "老师", "phonetic": "/ˈtiːtʃə/" },
+        { "en": "student", "zh": "学生", "phonetic": "/ˈstjuːdnt/" },
+        { "en": "school", "zh": "学校", "phonetic": "/skuːl/" },
+        { "en": "class", "zh": "班级；课", "phonetic": "/klɑːs/" }
+      ]
+    },
+    {
+      "id": "u3",
+      "title": "Unit 3 · Colors & Numbers",
+      "words": [
+        { "en": "red", "zh": "红色", "phonetic": "/red/" },
+        { "en": "blue", "zh": "蓝色", "phonetic": "/bluː/" },
+        { "en": "green", "zh": "绿色", "phonetic": "/ɡriːn/" },
+        { "en": "one", "zh": "一", "phonetic": "/wʌn/" },
+        { "en": "two", "zh": "二", "phonetic": "/tuː/" },
+        { "en": "three", "zh": "三", "phonetic": "/θriː/" },
+        { "en": "apple", "zh": "苹果", "phonetic": "/ˈæpl/" },
+        { "en": "banana", "zh": "香蕉", "phonetic": "/bəˈnɑːnə/" }
+      ]
+    }
+  ]
+}
