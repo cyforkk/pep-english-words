@@ -129,7 +129,7 @@ npm run convert:pep2019
 ```
 
 - 单元按脚本内**起始词**切分（含预备单元），见 `scripts/convert-pep-2019.mjs`  
-- **不要**使用 `npm run convert:pep`（旧课标 kajweb 转换，已废弃）
+- 旧课标脚本已归档到 `scripts/archive/`，勿使用
 
 ## 导入自定义词表
 
@@ -161,8 +161,8 @@ Unit 1,teenager,青少年
 pep2019-english-words/
 ├── public/data/textbooks/     # 2019 词库 JSON + index
 ├── scripts/
-│   ├── convert-pep-2019.mjs   # 2019 词库转换（使用这个）
-│   └── convert-pep-gaozhong.mjs  # 旧课标，勿用
+│   ├── convert-pep-2019.mjs   # 2019 词库转换
+│   └── archive/               # 废弃脚本（旧课标）
 ├── src/
 │   ├── App.tsx
 │   ├── components/
@@ -201,6 +201,7 @@ pep2019-english-words/
 | [Bug：单元默认全选](docs/bug-单元默认全选.md) | 换册默认不选单元 |
 | [Bug：手机无声音](docs/bug-手机点击无声音.md) | 移动端发音问题 |
 | [Bug：英文秒出中文不行](docs/bug-英文秒出中文不行.md) | 中英 TTS 差异（中文功能已不做） |
+| [代码审查：问题与解决方案](docs/code-review-2026-07-16.md) | 审查 11 项及已落地修复 |
 | [方案：中文音频预生成](docs/方案-中文音频预生成.md) | **已搁置**，当前不实现 |
 
 ## 版权说明

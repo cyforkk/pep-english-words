@@ -37,10 +37,6 @@ function clampRate(rate: number | undefined): number {
   return Math.min(1.5, Math.max(0.5, rate ?? 1))
 }
 
-function mapSpd(rate: number): number {
-  return Math.max(1, Math.min(7, Math.round(1 + (rate - 0.5) * 6)))
-}
-
 /** 全局唯一 Audio：解锁后连续改 src 播放，避免「只能由用户手势发起 play」 */
 function getSharedAudio(): HTMLAudioElement {
   if (!sharedAudio) {
@@ -200,24 +196,13 @@ export function cancelSpeak(): void {
   }
 }
 
-function onlineUrls(text: string, lang: SpeakLang, rate: number): string[] {
+/** 产品仅英文发音；中文 lang 时仍走英文有道（避免误用中文源） */
+function onlineUrls(text: string, _lang: SpeakLang, _rate: number): string[] {
   const raw = text.slice(0, 180)
   const q = encodeURIComponent(raw)
-  const spd = mapSpd(rate)
-
-  if (lang === 'en-US') {
-    return [
-      `https://dict.youdao.com/dictvoice?audio=${q}&type=2`,
-      `https://dict.youdao.com/dictvoice?audio=${q}&type=1`,
-    ]
-  }
-
-  // 中文：百度翻译 TTS 通常较快；再备选 text2audio / 有道
   return [
-    `https://fanyi.baidu.com/gettts?lan=zh&text=${q}&spd=${spd}&source=web`,
-    `https://tts.baidu.com/text2audio?lan=zh&ie=UTF-8&spd=${spd}&text=${q}`,
-    `https://tts.baidu.com/text2audio?tex=${q}&lan=zh&cuid=learn_en&ctp=1&pdt=1&spd=${spd}&per=0&vol=9`,
-    `https://dict.youdao.com/dictvoice?audio=${q}&le=zh`,
+    `https://dict.youdao.com/dictvoice?audio=${q}&type=2`,
+    `https://dict.youdao.com/dictvoice?audio=${q}&type=1`,
   ]
 }
 

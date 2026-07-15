@@ -15,6 +15,7 @@ export type Textbook = {
   title: string
   units: Unit[]
   source?: string
+  edition?: string
 }
 
 export type TextbookIndexItem = {
@@ -33,7 +34,6 @@ export type PlayerSettings = {
   rate: number
   repeatEn: number
   gapMs: number
-  shuffle: boolean
 }
 
 /** 点读：列表点英；跟读：自动念英文 */
@@ -45,5 +45,7 @@ export const DEFAULT_SETTINGS: PlayerSettings = {
   rate: 0.9,
   repeatEn: 2,
   gapMs: 3000,
-  shuffle: false,
 }
+
+/** 单词列表首屏条数，其余点「加载更多」 */
+export const WORD_LIST_PAGE_SIZE = 50

@@ -18,7 +18,7 @@ import type {
   TextbookIndex,
   Word,
 } from './types/textbook'
-import { DEFAULT_SETTINGS } from './types/textbook'
+import { DEFAULT_SETTINGS, WORD_LIST_PAGE_SIZE } from './types/textbook'
 
 export default function App() {
   const [catalog, setCatalog] = useState<Textbook[]>([])
@@ -34,7 +34,9 @@ export default function App() {
   const [error, setError] = useState<string | null>(null)
   const [voiceWarn, setVoiceWarn] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [loadWarn, setLoadWarn] = useState<string | null>(null)
   const [loadingBooks, setLoadingBooks] = useState(true)
+  const [listVisibleCount, setListVisibleCount] = useState(WORD_LIST_PAGE_SIZE)
 
   const playerRef = useRef<WordPlayer | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -59,42 +61,63 @@ export default function App() {
   useEffect(() => {
     setDisplayWords(selectedWords)
     setListShuffled(false)
+    setListVisibleCount(WORD_LIST_PAGE_SIZE)
   }, [selectedWords])
+
+  const visibleWords = useMemo(
+    () => displayWords.slice(0, listVisibleCount),
+    [displayWords, listVisibleCount],
+  )
 
   const shuffleWordList = () => {
     if (selectedWords.length < 2) return
     playerRef.current?.stop()
     setDisplayWords(shuffleArray(selectedWords))
     setListShuffled(true)
+    setListVisibleCount(WORD_LIST_PAGE_SIZE)
   }
 
   const restoreWordListOrder = () => {
     playerRef.current?.stop()
     setDisplayWords(selectedWords)
     setListShuffled(false)
+    setListVisibleCount(WORD_LIST_PAGE_SIZE)
   }
 
-  // 加载人教高中内置词库 index + 各册
+  // 并行加载词库；失败册汇总提示
   useEffect(() => {
     let cancelled = false
     setLoadingBooks(true)
+    setLoadWarn(null)
     fetch('/data/textbooks/index.json')
       .then((r) => {
         if (!r.ok) throw new Error(`加载词库索引失败: ${r.status}`)
         return r.json() as Promise<TextbookIndex>
       })
       .then(async (idx) => {
-        const books: Textbook[] = []
-        for (const item of idx.books) {
-          const res = await fetch(`/data/textbooks/${item.id}.json`)
-          if (!res.ok) continue
-          const book = (await res.json()) as Textbook
-          books.push(book)
-        }
+        const results = await Promise.all(
+          idx.books.map(async (item) => {
+            try {
+              const res = await fetch(`/data/textbooks/${item.id}.json`)
+              if (!res.ok) return { ok: false as const, id: item.id, title: item.title }
+              const book = (await res.json()) as Textbook
+              return { ok: true as const, book }
+            } catch {
+              return { ok: false as const, id: item.id, title: item.title }
+            }
+          }),
+        )
         if (cancelled) return
+        const books = results.filter((r) => r.ok).map((r) => r.book)
+        const failed = results.filter((r) => !r.ok)
         if (books.length === 0) throw new Error('词库为空，请检查 public/data/textbooks')
         setCatalog(books)
         setTextbookId((id) => id || books[0].id)
+        if (failed.length > 0) {
+          setLoadWarn(
+            `${failed.length} 册词库加载失败：${failed.map((f) => f.title || f.id).join('、')}`,
+          )
+        }
         setLoadingBooks(false)
       })
       .catch((e: unknown) => {
@@ -108,7 +131,6 @@ export default function App() {
     }
   }, [])
 
-  // 切换教材时默认不勾选任何单元（需用户自选或点「全选」）
   useEffect(() => {
     if (!textbook) return
     setSelectedUnits([])
@@ -181,6 +203,7 @@ export default function App() {
       setError('请先勾选至少一个单元')
       return
     }
+    // 严格按当前列表顺序（已打乱则用打乱结果，不再二次随机）
     void playerRef.current?.start(displayWords, playMode)
   }
 
@@ -200,9 +223,13 @@ export default function App() {
   const onRemoveImported = () => {
     if (!textbook || catalog.some((b) => b.id === textbook.id)) return
     if (!confirm(`删除导入教材「${textbook.title}」？`)) return
-    const list = removeImportedTextbook(textbook.id)
-    setImported(list)
-    setTextbookId(catalog[0]?.id ?? list[0]?.id ?? '')
+    try {
+      const list = removeImportedTextbook(textbook.id)
+      setImported(list)
+      setTextbookId(catalog[0]?.id ?? list[0]?.id ?? '')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
   }
 
   const isPlaying = status === 'playing' || status === 'paused'
@@ -228,6 +255,14 @@ export default function App() {
 
       {loadingBooks && <div className="alert alert-info">正在加载词库…</div>}
       {loadError && <div className="alert alert-error">{loadError}</div>}
+      {loadWarn && (
+        <div className="alert alert-warn">
+          {loadWarn}
+          <button type="button" className="btn btn-sm" style={{ marginLeft: '0.5rem' }} onClick={() => setLoadWarn(null)}>
+            关闭
+          </button>
+        </div>
+      )}
       {voiceWarn && (
         <div className="alert alert-info" role="status">
           <span>{voiceWarn}</span>
@@ -286,9 +321,11 @@ export default function App() {
           <span className={`status-pill ${status}`}>{statusLabel}</span>
           <span className="hint">
             {isPlaying || status === 'done'
-              ? '暂停 / 下一词 / 停止 → 屏幕底部'
+              ? status === 'paused'
+                ? '已暂停：可「继续」重试当前词，或「下一词」跳过'
+                : '暂停 / 下一词 / 停止 → 屏幕底部'
               : mode === 'shadow'
-                ? '跟读：自动念英文，可看中文释义'
+                ? '跟读：按列表顺序念英文（结束提示 Finished.）'
                 : '点读：在单词卡片点「英」发音'}
           </span>
         </div>
@@ -405,16 +442,8 @@ export default function App() {
                 onChange={(e) => patchSettings({ gapMs: Math.max(0, Number(e.target.value) || 0) })}
               />
             </label>
-            <label className="field inline span-2">
-              <input
-                type="checkbox"
-                checked={settings.shuffle}
-                onChange={(e) => patchSettings({ shuffle: e.target.checked })}
-              />
-              开始跟读时再随机
-            </label>
           </div>
-          <p className="hint">设置自动保存。跟读按当前单词列表顺序（可先打乱列表）。</p>
+          <p className="hint">设置自动保存。跟读严格按单词列表顺序；随机请用「打乱单词」。</p>
           <button
             type="button"
             className="btn btn-sm"
@@ -455,10 +484,13 @@ export default function App() {
               </button>
               <span className="hint">
                 {listShuffled ? '当前为随机顺序' : '当前为词库顺序'}
+                {displayWords.length > listVisibleCount
+                  ? ` · 显示 ${visibleWords.length}/${displayWords.length}`
+                  : ''}
               </span>
             </div>
             <div className="word-cards">
-              {displayWords.map((w, i) => {
+              {visibleWords.map((w, i) => {
                 const isCurrent =
                   isPlaying && currentWord && currentWord.en === w.en && currentWord.zh === w.zh
                 return (
@@ -482,6 +514,16 @@ export default function App() {
                 )
               })}
             </div>
+            {listVisibleCount < displayWords.length && (
+              <button
+                type="button"
+                className="btn btn-block"
+                style={{ marginTop: '0.75rem' }}
+                onClick={() => setListVisibleCount((n) => n + WORD_LIST_PAGE_SIZE)}
+              >
+                加载更多（还有 {displayWords.length - listVisibleCount} 词）
+              </button>
+            )}
           </>
         )}
       </section>
@@ -502,7 +544,12 @@ export default function App() {
                 </button>
               )}
               {status === 'paused' && (
-                <button type="button" className="btn btn-primary" onClick={() => playerRef.current?.resume()}>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onPointerDown={() => unlockSpeech()}
+                  onClick={() => playerRef.current?.resume()}
+                >
                   继续
                 </button>
               )}

@@ -18,8 +18,9 @@
     "dev:host": "vite --host",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "convert:pep": "node scripts/convert-pep-gaozhong.mjs",
-    "convert:pep2019": "node scripts/convert-pep-2019.mjs"
+    "convert:pep2019": "node scripts/convert-pep-2019.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "react": "^19.2.4",
@@ -31,6 +32,7 @@
     "@vitejs/plugin-react": "^5.1.4",
     "typescript": "~6.0.2",
     "vite": "^8.1.1",
+    "vitest": "^4.1.10",
     "xlsx": "^0.18.5"
   }
 }

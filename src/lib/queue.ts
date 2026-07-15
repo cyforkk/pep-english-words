@@ -17,14 +17,9 @@ export function shuffleArray<T>(arr: T[]): T[] {
   return a
 }
 
-export function buildQueue(words: Word[], shuffle: boolean): Word[] {
-  if (words.length === 0) return []
-  return shuffle ? shuffleArray(words) : [...words]
-}
-
 /**
- * 跟读播放状态机：英文 × repeatEn → gap → 下一词
- * （听写/中文朗读已从产品范围移除）
+ * 跟读播放状态机：严格按传入 words 顺序；英文 × repeatEn → gap → 下一词。
+ * speak 失败则暂停并上报，不空跑后续词。
  */
 export class WordPlayer {
   private queue: Word[] = []
@@ -101,11 +96,12 @@ export class WordPlayer {
     })
   }
 
+  /** 顺序严格等于传入列表（打乱只在 UI 层做一次） */
   async start(words: Word[], mode: PlayMode) {
     if (mode === 'browse') return
     this.stopInternal(false)
     this.mode = mode
-    this.queue = buildQueue(words, this.settings.shuffle)
+    this.queue = [...words]
     this.index = 0
     this.aborted = false
     this.forceNext = false
@@ -144,12 +140,15 @@ export class WordPlayer {
           }
         }
       } catch (e) {
-        this.callbacks.onError?.(e instanceof Error ? e.message : String(e))
+        const msg = e instanceof Error ? e.message : String(e)
+        this.callbacks.onError?.(`发音失败，已暂停：${msg}`)
+        // 停在当前词，不推进；用户可「下一词」跳过或「停止」
+        this.pause()
+        return
       }
 
       if (this.aborted || token !== this.runToken) return
 
-      // 跳过当前词时不再等待间隔；最后一词也不等待
       if (!this.forceNext && this.index < this.queue.length - 1) {
         await this.waitGap(Math.max(0, this.settings.gapMs))
         if (this.aborted || token !== this.runToken) return
@@ -162,8 +161,9 @@ export class WordPlayer {
     if (!this.aborted && token === this.runToken) {
       this.setStatus('done')
       this.callbacks.onIndexChange(this.queue.length, null)
+      // 仅英文结束提示（产品不做中文语音）
       try {
-        await speak('本单元结束', { lang: 'zh-CN', rate: this.settings.rate })
+        await speak('Finished.', { lang: 'en-US', rate: this.settings.rate })
       } catch {
         /* ignore */
       }
@@ -184,33 +184,32 @@ export class WordPlayer {
       const r = this.pauseResolve
       this.pauseResolve = null
       r()
+    } else {
+      // 从 speak 失败 pause 返回时没有 waitIfPaused 挂起，需从当前 index 重进 loop
+      const token = this.runToken
+      void this.loop(token)
     }
   }
 
   async skip() {
     if (this.status !== 'playing' && this.status !== 'paused') return
-    // 只打断当前发音/间隔，由 loop 统一 index++，避免双跳
     this.forceNext = true
     cancelSpeak()
     this.clearGap()
     if (this.status === 'paused') {
+      // 失败暂停时：跳过当前词并继续
+      this.index += 1
+      this.forceNext = false
       this.setStatus('playing')
       if (this.pauseResolve) {
         const r = this.pauseResolve
         this.pauseResolve = null
         r()
+      } else {
+        void this.loop(this.runToken)
       }
+      return
     }
-  }
-
-  /** 重读当前词：取消当前发音后由 loop 在 pause 恢复逻辑较复杂，改为 stop+从当前 index 重开 */
-  async replayCurrent() {
-    if (this.queue.length === 0) return
-    if (this.index >= this.queue.length) this.index = this.queue.length - 1
-    const from = this.index
-    const rest = this.queue.slice(from)
-    const mode = this.mode
-    await this.start(rest, mode)
   }
 
   stop() {

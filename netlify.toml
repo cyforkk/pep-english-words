@@ -10,7 +10,13 @@
   NODE_VERSION = "22"
   NPM_FLAGS = "--no-fund --no-audit"
 
-# 单页应用：刷新任意路径都回 index.html（当前无路由也建议保留）
+# SPA 回退：不抢 /data、/assets 等已有静态文件（Netlify 默认先静态后规则）
+[[redirects]]
+  from = "/data/*"
+  to = "/data/:splat"
+  status = 200
+  force = false
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
