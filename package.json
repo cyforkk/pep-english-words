@@ -1,15 +1,15 @@
 {
-  "name": "pep2019-english-words",
+  "name": "pep-english-words",
   "private": false,
   "version": "1.0.0",
-  "description": "人教版 PEP 2019 高中英语单词点读与跟读（开源）",
+  "description": "人教版 PEP 英语单词点读与跟读：小学 + 初中 + 高中 2019（开源）",
   "repository": {
     "type": "git",
-    "url": "https://github.com/cyforkk/pep2019-english-words.git"
+    "url": "https://github.com/cyforkk/pep-english-words.git"
   },
-  "homepage": "https://github.com/cyforkk/pep2019-english-words",
+  "homepage": "https://github.com/cyforkk/pep-english-words",
   "bugs": {
-    "url": "https://github.com/cyforkk/pep2019-english-words/issues"
+    "url": "https://github.com/cyforkk/pep-english-words/issues"
   },
   "license": "MIT",
   "type": "module",

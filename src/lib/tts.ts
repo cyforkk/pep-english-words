@@ -20,6 +20,10 @@ let sharedAudio: HTMLAudioElement | null = null
 let unlocked = false
 let playChain: Promise<void> = Promise.resolve()
 let voicesReady = false
+/** 当前在线播放的 settle；cancelSpeak 时 resolve，避免 Promise 挂起 */
+let activeOnlineSettle: (() => void) | null = null
+/** cancel 递增；旧 playChain 任务发现世代过期则直接结束，避免交错播 */
+let playGeneration = 0
 
 function getSynth(): SpeechSynthesis | null {
   if (typeof window === 'undefined') return null
@@ -167,15 +171,26 @@ export function unlockSpeech(): void {
   }
 }
 
+/**
+ * 打断当前与排队中的发音。
+ * 在线 Audio：resolve 当前 play（非 reject），避免 WordPlayer 当成失败暂停。
+ * 系统语音：cancel → interrupted，speakNative 会 resolve。
+ * playGeneration 使旧排队任务在 await 后直接放弃，减轻连点/点读与跟读交错。
+ */
 export function cancelSpeak(): void {
-  // 打断排队
+  playGeneration += 1
   playChain = Promise.resolve()
+  const settle = activeOnlineSettle
+  activeOnlineSettle = null
+  if (settle) settle()
+
   const a = sharedAudio
   if (a) {
     try {
       a.onended = null
       a.onerror = null
       a.onplaying = null
+      a.onloadeddata = null
       a.pause()
       try {
         a.currentTime = 0
@@ -224,14 +239,17 @@ function playOneUrl(audio: HTMLAudioElement, url: string, rate: number): Promise
       audio.onerror = null
       audio.onplaying = null
       audio.onloadeddata = null
+      if (activeOnlineSettle === markDone) activeOnlineSettle = null
     }
 
-    const succeed = () => {
+    const markDone = () => {
       if (settled) return
       settled = true
       clear()
       resolve()
     }
+
+    const succeed = () => markDone()
 
     const fail = (reason: string) => {
       if (settled) return
@@ -244,6 +262,9 @@ function playOneUrl(audio: HTMLAudioElement, url: string, rate: number): Promise
       }
       reject(new Error(reason))
     }
+
+    // 供 cancelSpeak 正常结束本 Promise（resolve，非 reject）
+    activeOnlineSettle = markDone
 
     audio.onplaying = () => {
       started = true
@@ -328,18 +349,23 @@ function speakOnline(text: string, lang: SpeakLang, rate: number): Promise<void>
   const urls = onlineUrls(text, lang, rate)
   const r = clampRate(rate)
   const errors: string[] = []
+  const gen = playGeneration
 
   const run = async () => {
+    if (gen !== playGeneration) return
     // 确保 volume 恢复（解锁时可能为 0）
     audio.volume = 1
     for (let i = 0; i < urls.length; i++) {
+      if (gen !== playGeneration) return
       try {
         await playOneUrl(audio, urls[i], r)
         return
       } catch (e) {
+        if (gen !== playGeneration) return
         errors.push(`源${i + 1}:${e instanceof Error ? e.message : String(e)}`)
       }
     }
+    if (gen !== playGeneration) return
     throw new Error(`在线发音失败（${errors.slice(0, 3).join('；')}）`)
   }
 

@@ -1,3 +1,7 @@
+/**
+ * 教材 JSON/CSV 解析工具。
+ * 产品 UI 已取消「导入词表」；本模块供单元测试与将来扩展/脚本使用。
+ */
 import type { Textbook, Unit, Word } from '../types/textbook'
 
 function isWord(x: unknown): x is Word {

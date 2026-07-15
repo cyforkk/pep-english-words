@@ -1,13 +1,13 @@
-# 高中英语单词 · 点读跟读
+# 人教英语单词 · 点读跟读
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
-[![GitHub](https://img.shields.io/badge/GitHub-pep2019--english--words-181717?logo=github)](https://github.com/cyforkk/pep2019-english-words)
+[![GitHub](https://img.shields.io/badge/GitHub-pep--english--words-181717?logo=github)](https://github.com/cyforkk/pep-english-words)
 
 **开源** · 轻量纯前端英语单词练习页。
 
-内置**人教版（PEP）2019 新教材**词库，按册 / 单元做 **英文点读** 与 **英文跟读**。界面按**手机网页优先**适配，可自托管或一键部署到 Netlify。
+内置**人教版（PEP）**词库：**小学（三年级起点）+ 初中 + 高中 2019**，按册 / 单元做 **英文点读** 与 **英文跟读**。界面按**手机网页优先**适配，可自托管或一键部署到 Netlify。
 
-- 仓库：https://github.com/cyforkk/pep2019-english-words  
+- 仓库：https://github.com/cyforkk/pep-english-words  
 - 欢迎 Issue / Pull Request
 
 ## 当前范围
@@ -16,27 +16,28 @@
 |----|------|
 | 英文点读（点「英」） | 中文语音输出 |
 | 英文跟读（自动念英文） | 中文听写 |
-| 人教 2019 七册词库 | 中文 mp3 预生成（方案已搁置） |
+| 人教小学 / 初中 / 高中 2019 词库 | 中文 mp3 预生成（方案已搁置） |
 | 打乱 / 恢复列表顺序 | 账号 / 云同步 |
-| 导入 JSON/CSV | |
+| 记住上次教材与单元（本地缓存） | 导入自定义词表 |
 
 中文释义**仅展示**，不朗读。
 
 ## 功能一览
 
-- **词库**：必修第一～三册 + 选择性必修第一～四册（共 7 册）  
-- **单元**：必修一含 **Welcome Unit · 预备单元** + Unit 1～5；其它册按课本主题切分（部分册为均分 Unit）  
-- **选单元**：切换教材后**默认不勾选**，需自选或点「全选」  
+- **词库**：小学 8 册 + 初中 5 册 + 高中 2019 七册（共 20 册）  
+- **单元**：高中必修一含 **Welcome Unit · 预备单元**；部分册按起始词切分，其余均分 Unit  
+- **学段折叠**：小学 / 初中 / 高中可展开收起  
+- **本地缓存**：记住上次选择的教材、单元勾选、学段展开状态  
+- **选单元**：换册后默认清空勾选（恢复缓存时保留上次勾选）  
 - **点读**：单词卡片点「英」发音（有道在线，需联网）  
 - **跟读**：按当前列表自动念英文，可看中文；底部栏暂停 / 下一词 / 停止  
-- **打乱单词**：仅打乱当前已选单元的列表顺序，可恢复  
-- **导入**：支持自定义词表（JSON / CSV）
+- **打乱单词**：仅打乱当前已选单元的列表顺序，可恢复
 
 ## 快速开始
 
 ```bash
-git clone https://github.com/cyforkk/pep2019-english-words.git
-cd pep2019-english-words
+git clone https://github.com/cyforkk/pep-english-words.git
+cd pep-english-words
 npm install
 npm run dev
 ```
@@ -70,7 +71,7 @@ npm run preview
 
 ### 方式一：Git 连接（推荐）
 
-1. Fork 或直接使用本仓库：https://github.com/cyforkk/pep2019-english-words  
+1. Fork 或直接使用本仓库：https://github.com/cyforkk/pep-english-words  
 2. [Netlify](https://app.netlify.com/) → **Add new site** → **Import an existing project**  
 3. 选择仓库；配置会从 `netlify.toml` 自动读取：  
    - **Build command:** `npm run build`  
@@ -111,13 +112,17 @@ npm run build
 
 ## 内置词库
 
-| 分册 | 文件 id |
-|------|---------|
-| 必修第一册（含预备单元） | `pep2019-compulsory-1` |
-| 必修第二、三册 | `pep2019-compulsory-2` / `3` |
-| 选择性必修第一～四册 | `pep2019-optional-1` … `4` |
+| 学段 | 内容 | 文件 id 前缀 |
+|------|------|----------------|
+| **小学** | 三年级起点 三上～六下（8 册） | `pep-primary-*` |
+| **初中** | 七上/下、八上/下、九年级全册（5 册） | `pep-junior-*` |
+| **高中 2019** | 必修一～三 + 选择性必修一～四（7 册；必修一含预备单元） | `pep2019-*` |
 
-数据目录：`public/data/textbooks/pep2019-*.json`、`index.json`。
+数据目录：`public/data/textbooks/`、`index.json`。  
+下拉按「小学 / 初中 / 高中」分组。  
+
+> 小学为三年级起点系列（标题不显示该字样）。「一年级起点」源文件暂未接入。  
+> 教材列表按 **小学 / 初中 / 高中** 分组，支持折叠展开。
 
 ### 重新从源转换
 
@@ -131,19 +136,16 @@ npm run convert:pep2019
 - 单元按脚本内**起始词**切分（含预备单元），见 `scripts/convert-pep-2019.mjs`  
 - 旧课标脚本已归档到 `scripts/archive/`，勿使用
 
-## 导入自定义词表
+## 本地缓存
 
-见 [docs/教材词库数据结构.md](docs/教材词库数据结构.md)。
+所有可选参数均写入浏览器 `localStorage`，刷新后自动恢复：
 
-**CSV（UTF-8）：**
+| 键 | 内容 |
+|----|------|
+| `le_selection_v1` | 教材 id、勾选单元、小学/初中/高中折叠、点读/跟读模式 |
+| `le_player_settings` | 语速（**默认 1.0**）、英文跟读遍数、词间隔 ms |
 
-```csv
-unit,en,zh
-Welcome Unit,exchange,交换；交流
-Unit 1,teenager,青少年
-```
-
-**JSON：** 根对象含 `id`、`title`、`units[]`，单元内 `words: [{ en, zh, phonetic? }]`。
+词库 JSON 结构说明见 [docs/教材词库数据结构.md](docs/教材词库数据结构.md)（供维护内置词库参考）。
 
 ## 技术栈
 
@@ -153,22 +155,22 @@ Unit 1,teenager,青少年
 | UI | React + TypeScript |
 | 词表转换 | Node + `xlsx` |
 | 英文发音 | 在线 TTS（有道等）+ 系统语音回退 |
-| 存储 | localStorage（设置、用户导入词表） |
+| 存储 | localStorage（设置 + 教材/单元选择缓存） |
 
 ## 目录结构
 
 ```
-pep2019-english-words/
-├── public/data/textbooks/     # 2019 词库 JSON + index
+pep-english-words/
+├── public/data/textbooks/     # 小学 / 初中 / 高中 2019 词库 JSON + index
 ├── scripts/
-│   ├── convert-pep-2019.mjs   # 2019 词库转换
+│   ├── convert-pep-2019.mjs   # 词库转换
 │   └── archive/               # 废弃脚本（旧课标）
 ├── src/
 │   ├── App.tsx
 │   ├── components/
-│   ├── lib/                   # tts、播放队列、导入、存储
+│   ├── lib/                   # tts、播放队列、存储、目录加载
 │   └── types/
-├── docs/                      # 词库说明、bug 记录、方案归档
+├── docs/                      # 词库说明、bug 记录、用户需求
 ├── netlify.toml
 └── LICENSE                    # MIT
 ```
@@ -181,7 +183,7 @@ pep2019-english-words/
 2. 新建分支：`git checkout -b feature/your-change`  
 3. 提交并推送后发起 Pull Request  
 
-也可直接提 [Issue](https://github.com/cyforkk/pep2019-english-words/issues) 反馈问题或建议。
+也可直接提 [Issue](https://github.com/cyforkk/pep-english-words/issues) 反馈问题或建议。
 
 开发约定简述：
 
@@ -193,7 +195,8 @@ pep2019-english-words/
 
 | 文档 | 内容 |
 |------|------|
-| [词库说明](docs/词库-人教版高中英语.md) | 2019 词库定位与分册 |
+| [词库说明·高中](docs/词库-人教版高中英语.md) | 高中 2019 词库 |
+| [词库说明·小学初中](docs/词库-人教版小学初中.md) | 小学三年级起点 + 初中 |
 | [词库资源检索](docs/词库资源-检索记录.md) | 数据来源、转换命令 |
 | [词库数据结构](docs/教材词库数据结构.md) | JSON/CSV 字段 |
 | [功能实现说明](docs/听写跟读功能实现说明.md) | 实现要点与范围变更 |
@@ -202,6 +205,9 @@ pep2019-english-words/
 | [Bug：手机无声音](docs/bug-手机点击无声音.md) | 移动端发音问题 |
 | [Bug：英文秒出中文不行](docs/bug-英文秒出中文不行.md) | 中英 TTS 差异（中文功能已不做） |
 | [代码审查：问题与解决方案](docs/code-review-2026-07-16.md) | 审查 11 项及已落地修复 |
+| [代码审查第二轮](docs/code-review-2026-07-16-r2.md) | 缓存/折叠等增量审查 |
+| [Bug：去掉导入与选择缓存](docs/bug-去掉导入与选择缓存.md) | 取消导入；记住教材/单元 |
+| [用户需求与变更记录](docs/用户需求与变更记录.md) | 功能增减 / 修 bug / 协作要求总表 |
 | [方案：中文音频预生成](docs/方案-中文音频预生成.md) | **已搁置**，当前不实现 |
 
 ## 版权说明

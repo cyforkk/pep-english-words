@@ -1,32 +1,24 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { SpeakButton } from './components/SpeakButton'
-import { parseTextbookFile } from './lib/import'
+import { loadCatalogProgressive } from './lib/catalog'
 import { shuffleArray, WordPlayer } from './lib/queue'
 import {
-  loadImportedTextbooks,
+  loadSelection,
   loadSettings,
-  removeImportedTextbook,
+  normalizeSettings,
+  saveSelection,
   saveSettings,
-  upsertImportedTextbook,
 } from './lib/storage'
 import { ensureVoicesLoaded, isMobileClient, unlockSpeech } from './lib/tts'
-import type {
-  PlayMode,
-  PlayerSettings,
-  PlayerStatus,
-  Textbook,
-  TextbookIndex,
-  Word,
-} from './types/textbook'
+import type { PlayMode, PlayerSettings, PlayerStatus, Textbook, Word } from './types/textbook'
 import { DEFAULT_SETTINGS, WORD_LIST_PAGE_SIZE } from './types/textbook'
 
 export default function App() {
   const [catalog, setCatalog] = useState<Textbook[]>([])
-  const [imported, setImported] = useState<Textbook[]>(() => loadImportedTextbooks())
   const [textbookId, setTextbookId] = useState<string>('')
   const [selectedUnits, setSelectedUnits] = useState<string[]>([])
   const [settings, setSettings] = useState<PlayerSettings>(() => loadSettings())
-  const [mode, setMode] = useState<PlayMode>('browse')
+  const [mode, setMode] = useState<PlayMode>(() => loadSelection()?.mode ?? 'browse')
   const [status, setStatus] = useState<PlayerStatus>('idle')
   const [playIndex, setPlayIndex] = useState(0)
   const [currentWord, setCurrentWord] = useState<Word | null>(null)
@@ -37,18 +29,11 @@ export default function App() {
   const [loadWarn, setLoadWarn] = useState<string | null>(null)
   const [loadingBooks, setLoadingBooks] = useState(true)
   const [listVisibleCount, setListVisibleCount] = useState(WORD_LIST_PAGE_SIZE)
+  const [openStages, setOpenStages] = useState<Record<string, boolean>>({})
 
   const playerRef = useRef<WordPlayer | null>(null)
-  const fileRef = useRef<HTMLInputElement>(null)
 
-  const allBooks = useMemo(() => {
-    const map = new Map<string, Textbook>()
-    for (const b of catalog) map.set(b.id, b)
-    for (const b of imported) map.set(b.id, b)
-    return [...map.values()]
-  }, [catalog, imported])
-
-  const textbook = allBooks.find((b) => b.id === textbookId) ?? null
+  const textbook = catalog.find((b) => b.id === textbookId) ?? null
 
   const selectedWords = useMemo(() => {
     if (!textbook) return [] as Word[]
@@ -84,57 +69,72 @@ export default function App() {
     setListVisibleCount(WORD_LIST_PAGE_SIZE)
   }
 
-  // 并行加载词库；失败册汇总提示
+  // 优先加载缓存册，再限并发预取其余；恢复单元勾选与学段折叠
   useEffect(() => {
-    let cancelled = false
+    const signal = { cancelled: false }
     setLoadingBooks(true)
     setLoadWarn(null)
-    fetch('/data/textbooks/index.json')
-      .then((r) => {
-        if (!r.ok) throw new Error(`加载词库索引失败: ${r.status}`)
-        return r.json() as Promise<TextbookIndex>
-      })
-      .then(async (idx) => {
-        const results = await Promise.all(
-          idx.books.map(async (item) => {
-            try {
-              const res = await fetch(`/data/textbooks/${item.id}.json`)
-              if (!res.ok) return { ok: false as const, id: item.id, title: item.title }
-              const book = (await res.json()) as Textbook
-              return { ok: true as const, book }
-            } catch {
-              return { ok: false as const, id: item.id, title: item.title }
-            }
-          }),
-        )
-        if (cancelled) return
-        const books = results.filter((r) => r.ok).map((r) => r.book)
-        const failed = results.filter((r) => !r.ok)
-        if (books.length === 0) throw new Error('词库为空，请检查 public/data/textbooks')
+    const cached = loadSelection()
+
+    void loadCatalogProgressive({
+      preferredId: cached?.textbookId,
+      signal,
+      onReady: (book, preferredId) => {
+        if (signal.cancelled) return
+        const unitIds = new Set(book.units.map((u) => u.id))
+        const units = cached?.selectedUnits?.filter((u) => unitIds.has(u)) ?? []
+        setCatalog([book])
+        setTextbookId(preferredId)
+        setSelectedUnits(units)
+        if (cached?.mode === 'browse' || cached?.mode === 'shadow') {
+          setMode(cached.mode)
+        }
+        const stage = stageKeyOf(book)
+        // 恢复小学/初中/高中折叠；当前册学段至少展开
+        setOpenStages({ ...(cached?.openStages ?? {}), [stage]: true })
+        setLoadingBooks(false)
+      },
+      onComplete: (books, failed) => {
+        if (signal.cancelled) return
         setCatalog(books)
-        setTextbookId((id) => id || books[0].id)
         if (failed.length > 0) {
           setLoadWarn(
             `${failed.length} 册词库加载失败：${failed.map((f) => f.title || f.id).join('、')}`,
           )
         }
+      },
+    }).catch((e: unknown) => {
+      if (!signal.cancelled) {
+        setLoadError(e instanceof Error ? e.message : String(e))
         setLoadingBooks(false)
-      })
-      .catch((e: unknown) => {
-        if (!cancelled) {
-          setLoadError(e instanceof Error ? e.message : String(e))
-          setLoadingBooks(false)
-        }
-      })
+      }
+    })
+
     return () => {
-      cancelled = true
+      signal.cancelled = true
     }
   }, [])
 
+  // 仅展开当前教材所在学段（换册清空单元在点选教材时处理）
   useEffect(() => {
     if (!textbook) return
-    setSelectedUnits([])
-  }, [textbookId]) // eslint-disable-line react-hooks/exhaustive-deps
+    const key = stageKeyOf(textbook)
+    setOpenStages((prev) => (prev[key] ? prev : { ...prev, [key]: true }))
+  }, [textbook])
+
+  // 持久化：教材 / 单元 / 学段折叠 / 点读·跟读模式（防抖）
+  useEffect(() => {
+    if (!textbookId || loadingBooks) return
+    const t = window.setTimeout(() => {
+      saveSelection({
+        textbookId,
+        selectedUnits,
+        openStages,
+        mode,
+      })
+    }, 250)
+    return () => window.clearTimeout(t)
+  }, [textbookId, selectedUnits, openStages, mode, loadingBooks])
 
   useEffect(() => {
     const unlock = () => unlockSpeech()
@@ -171,13 +171,17 @@ export default function App() {
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // 持久化：语速 / 跟读遍数 / 词间隔（防抖；默认语速 1.0）
   useEffect(() => {
     playerRef.current?.updateSettings(settings)
-    saveSettings(settings)
+    const t = window.setTimeout(() => {
+      saveSettings(settings)
+    }, 250)
+    return () => window.clearTimeout(t)
   }, [settings])
 
   const patchSettings = useCallback((partial: Partial<PlayerSettings>) => {
-    setSettings((s) => ({ ...s, ...partial }))
+    setSettings((s) => normalizeSettings({ ...s, ...partial }))
   }, [])
 
   const toggleUnit = (id: string) => {
@@ -203,38 +207,11 @@ export default function App() {
       setError('请先勾选至少一个单元')
       return
     }
-    // 严格按当前列表顺序（已打乱则用打乱结果，不再二次随机）
     void playerRef.current?.start(displayWords, playMode)
-  }
-
-  const onImport = async (file: File | null) => {
-    if (!file) return
-    setError(null)
-    try {
-      const book = await parseTextbookFile(file)
-      const list = upsertImportedTextbook(book)
-      setImported(list)
-      setTextbookId(book.id)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    }
-  }
-
-  const onRemoveImported = () => {
-    if (!textbook || catalog.some((b) => b.id === textbook.id)) return
-    if (!confirm(`删除导入教材「${textbook.title}」？`)) return
-    try {
-      const list = removeImportedTextbook(textbook.id)
-      setImported(list)
-      setTextbookId(catalog[0]?.id ?? list[0]?.id ?? '')
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-    }
   }
 
   const isPlaying = status === 'playing' || status === 'paused'
   const showBottomBar = isPlaying || status === 'done'
-  const isImported = textbook != null && !catalog.some((b) => b.id === textbook.id)
 
   const statusLabel =
     status === 'playing' ? '播放中' : status === 'paused' ? '已暂停' : status === 'done' ? '已结束' : '空闲'
@@ -249,8 +226,8 @@ export default function App() {
   return (
     <div className={`app${showBottomBar ? ' has-bottom-bar' : ''}`}>
       <header className="header">
-        <h1>高中英语单词 · 点读跟读</h1>
-        <p className="sub">人教版高中词库 · 选单元 · 英文点读 · 跟读练习 · 可打乱</p>
+        <h1>人教英语单词 · 点读跟读</h1>
+        <p className="sub">小学 / 初中 / 高中 · 选单元 · 英文点读 · 跟读 · 可打乱</p>
       </header>
 
       {loadingBooks && <div className="alert alert-info">正在加载词库…</div>}
@@ -333,46 +310,58 @@ export default function App() {
 
       <section className="card">
         <h2>教材与单元</h2>
-        <label className="field full">
-          教材
-          <select
-            value={textbookId}
-            disabled={loadingBooks || allBooks.length === 0}
-            onChange={(e) => {
-              playerRef.current?.stop()
-              setTextbookId(e.target.value)
-            }}
-          >
-            {allBooks.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.title}
-                {isImportedBook(b.id, catalog) ? '（导入）' : ''}
-              </option>
-            ))}
-          </select>
-        </label>
+        <p className="hint" style={{ marginTop: 0, marginBottom: '0.65rem' }}>
+          学段可折叠；点选教材与单元。上次选择会自动记住。当前：
+          <strong> {textbook?.title ?? '未选择'}</strong>
+        </p>
 
-        <div className="import-actions" style={{ marginTop: '0.55rem' }}>
-          <button type="button" className="btn" onClick={() => fileRef.current?.click()}>
-            导入词表
-          </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".json,.csv,.txt,application/json,text/csv"
-            className="hidden-file"
-            onChange={(e) => {
-              void onImport(e.target.files?.[0] ?? null)
-              e.target.value = ''
-            }}
-          />
-          {isImported && (
-            <button type="button" className="btn btn-danger" onClick={onRemoveImported}>
-              删除导入
-            </button>
-          )}
+        <div className="stage-fold-list">
+          {groupBooks(catalog).map((group) => {
+            const open = openStages[group.key] === true
+            return (
+              <div key={group.key} className="stage-fold">
+                <button
+                  type="button"
+                  className="stage-fold-head"
+                  disabled={loadingBooks}
+                  aria-expanded={open}
+                  onClick={() =>
+                    setOpenStages((prev) => ({ ...prev, [group.key]: !prev[group.key] }))
+                  }
+                >
+                  <span className="stage-fold-title">{group.label}</span>
+                  <span className="stage-fold-meta">{group.books.length} 册</span>
+                  <span className="stage-fold-chevron">{open ? '收起' : '展开'}</span>
+                </button>
+                {open && (
+                  <div className="stage-fold-body book-pick-list">
+                    {group.books.map((b) => {
+                      const active = b.id === textbookId
+                      return (
+                        <button
+                          key={b.id}
+                          type="button"
+                          className={`book-pick${active ? ' active' : ''}`}
+                          onClick={() => {
+                            if (b.id === textbookId) return
+                            playerRef.current?.stop()
+                            setSelectedUnits([])
+                            setTextbookId(b.id)
+                          }}
+                        >
+                          <span className="book-pick-title">{displayBookTitle(b.title)}</span>
+                          {active && <span className="book-pick-badge">当前</span>}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
-        <p className="hint">内置人教版（2019）必修 + 选择性必修。也可导入 JSON/CSV（unit,en,zh）。</p>
+
+        <p className="hint">内置人教版小学、初中、高中 2019 词库。</p>
 
         {textbook && (
           <>
@@ -443,12 +432,14 @@ export default function App() {
               />
             </label>
           </div>
-          <p className="hint">设置自动保存。跟读严格按单词列表顺序；随机请用「打乱单词」。</p>
+          <p className="hint">
+            语速 / 遍数 / 间隔自动缓存到本机（默认语速 1.0）。跟读严格按列表顺序；随机请用「打乱单词」。
+          </p>
           <button
             type="button"
             className="btn btn-sm"
             style={{ marginTop: '0.55rem' }}
-            onClick={() => setSettings({ ...DEFAULT_SETTINGS })}
+            onClick={() => setSettings(normalizeSettings(DEFAULT_SETTINGS))}
           >
             恢复默认
           </button>
@@ -585,6 +576,40 @@ export default function App() {
   )
 }
 
-function isImportedBook(id: string, catalog: Textbook[]) {
-  return !catalog.some((b) => b.id === id)
+function stageLabel(stage?: string) {
+  if (stage === 'primary') return '小学'
+  if (stage === 'junior') return '初中'
+  if (stage === 'senior') return '高中'
+  return '其它'
+}
+
+function stageKeyOf(book: Textbook) {
+  if (book.stage === 'primary' || book.stage === 'junior' || book.stage === 'senior') {
+    return book.stage
+  }
+  return 'other'
+}
+
+function displayBookTitle(title: string) {
+  return title.replace(/（三年级起点）/g, '').trim()
+}
+
+function groupBooks(catalog: Textbook[]) {
+  const order = ['primary', 'junior', 'senior', 'other'] as const
+  const buckets = new Map<string, Textbook[]>()
+  for (const key of order) buckets.set(key, [])
+
+  for (const b of catalog) {
+    const key = stageKeyOf(b)
+    if (!buckets.has(key)) buckets.set(key, [])
+    buckets.get(key)!.push(b)
+  }
+
+  return order
+    .filter((k) => (buckets.get(k)?.length ?? 0) > 0)
+    .map((k) => ({
+      key: k,
+      label: stageLabel(k),
+      books: buckets.get(k)!,
+    }))
 }

@@ -298,6 +298,110 @@ input[type='range'] {
   grid-column: 1 / -1;
 }
 
+/* 学段折叠（小学 / 初中 / 高中） */
+.stage-fold-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.stage-fold {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fafbfc;
+}
+
+.stage-fold-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: var(--tap);
+  padding: 0.55rem 0.75rem;
+  border: none;
+  background: #f3f4f6;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.stage-fold-head:active {
+  background: #e5e7eb;
+}
+
+.stage-fold-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.stage-fold-meta {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.stage-fold-chevron {
+  margin-left: auto;
+  color: var(--primary);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.stage-fold-body {
+  padding: 0.4rem;
+  border-top: 1px solid var(--border);
+  background: #fff;
+}
+
+.book-pick-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  max-height: 40vh;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.book-pick {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.book-pick:hover {
+  background: #f3f4f6;
+}
+
+.book-pick.active {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.book-pick-title {
+  flex: 1;
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.book-pick-badge {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--primary);
+  background: #dbeafe;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+}
+
 .unit-list {
   display: flex;
   flex-direction: column;

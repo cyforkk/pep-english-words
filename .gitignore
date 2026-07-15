@@ -13,6 +13,9 @@ dist-ssr
 *.local
 tmp/
 
+# 图标源文件（站点使用 public/favicon.svg）
+/英语.svg
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

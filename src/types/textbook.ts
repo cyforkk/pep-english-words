@@ -10,12 +10,15 @@ export type Unit = {
   words: Word[]
 }
 
+export type TextbookStage = 'primary' | 'junior' | 'senior'
+
 export type Textbook = {
   id: string
   title: string
   units: Unit[]
   source?: string
   edition?: string
+  stage?: TextbookStage
 }
 
 export type TextbookIndexItem = {
@@ -23,10 +26,12 @@ export type TextbookIndexItem = {
   title: string
   words: number
   units: number
+  stage?: TextbookStage
 }
 
 export type TextbookIndex = {
   description?: string
+  stages?: string[]
   books: TextbookIndexItem[]
 }
 
@@ -42,7 +47,7 @@ export type PlayMode = 'browse' | 'shadow'
 export type PlayerStatus = 'idle' | 'playing' | 'paused' | 'done'
 
 export const DEFAULT_SETTINGS: PlayerSettings = {
-  rate: 0.9,
+  rate: 1.0,
   repeatEn: 2,
   gapMs: 3000,
 }

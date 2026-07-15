@@ -1,8 +1,9 @@
 {
   "id": "pep2019-optional-4",
   "title": "人教版高中英语（2019）· 选择性必修第四册",
+  "stage": "senior",
   "edition": "PEP 2019",
-  "source": "lilinji/English 人教版 xlsx（2019）",
+  "source": "lilinji/English 人教版 xlsx",
   "units": [
     {
       "id": "u1",
