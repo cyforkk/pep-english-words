@@ -7,30 +7,48 @@ type Props = {
   label: string
   disabled?: boolean
   onError?: (message: string) => void
+  /**
+   * 默写等场景：title 不拼接 text，避免悬停剧透拼写。
+   * 未传时默认 `${label}：${text}`。
+   */
+  title?: string
+  /** 为 true 时 title 仅用 label（等同 hideTextInTitle） */
+  hideTextInTitle?: boolean
 }
 
-export function SpeakButton({ text, lang, rate, label, disabled, onError }: Props) {
+export function SpeakButton({
+  text,
+  lang,
+  rate,
+  label,
+  disabled,
+  onError,
+  title,
+  hideTextInTitle,
+}: Props) {
   const kind = lang === 'en-US' ? 'en' : 'zh'
 
-  /** 按下瞬间解锁（比 click 更早，兼容 iOS） */
   const arm = () => {
     unlockSpeech()
   }
 
   const play = () => {
-    // 同步再解锁一次，然后立刻启动 speak（内部用共享 Audio）
     unlockSpeech()
     void speak(text, { lang, rate }).catch((e: unknown) => {
       onError?.(e instanceof Error ? e.message : String(e))
     })
   }
 
+  const tip =
+    title ??
+    (hideTextInTitle ? label : text ? `${label}：${text}` : label)
+
   return (
     <button
       type="button"
       className={`btn btn-speak ${kind}`}
       disabled={disabled || !text}
-      title={`${label}：${text}`}
+      title={tip}
       onTouchStart={arm}
       onPointerDown={arm}
       onMouseDown={arm}

@@ -496,6 +496,26 @@ input[type='range'] {
   margin-top: 0.15rem;
 }
 
+/* 默写：中文作主提示 */
+.word-card .zh.zh-dictation {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #111827;
+  margin-top: 0;
+}
+
+.badge-dictation {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+/* 跟读面板默写：不显示英文拼写 */
+.current-word-panel .en-big-dictation {
+  color: var(--muted);
+  letter-spacing: 0.15em;
+  user-select: none;
+}
+
 .word-card .phonetic {
   color: var(--muted);
   font-size: 0.8rem;

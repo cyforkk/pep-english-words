@@ -14,6 +14,8 @@ export type UserSelection = {
   openStages?: Record<string, boolean>
   /** 上次模式：点读 browse / 跟读 shadow */
   mode?: PlayMode
+  /** 默写：列表隐藏英文与音标，仅显示中文 */
+  dictationMode?: boolean
 }
 
 const RATE_MIN = 0.5
@@ -90,6 +92,7 @@ export function loadSelection(): UserSelection | null {
         : [],
       openStages: normalizeOpenStages(data.openStages),
       mode: normalizeMode(data.mode),
+      dictationMode: data.dictationMode === true,
     }
   } catch {
     return null
@@ -105,6 +108,7 @@ export function saveSelection(sel: UserSelection): void {
         selectedUnits: sel.selectedUnits,
         openStages: sel.openStages ?? {},
         mode: sel.mode === 'shadow' || sel.mode === 'browse' ? sel.mode : 'browse',
+        dictationMode: sel.dictationMode === true,
       }),
     )
   } catch {

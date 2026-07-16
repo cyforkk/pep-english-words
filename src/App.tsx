@@ -30,6 +30,10 @@ export default function App() {
   const [loadingBooks, setLoadingBooks] = useState(true)
   const [listVisibleCount, setListVisibleCount] = useState(WORD_LIST_PAGE_SIZE)
   const [openStages, setOpenStages] = useState<Record<string, boolean>>({})
+  /** 默写：隐藏列表英文与音标，仅显示中文释义 */
+  const [dictationMode, setDictationMode] = useState(
+    () => loadSelection()?.dictationMode === true,
+  )
 
   const playerRef = useRef<WordPlayer | null>(null)
 
@@ -89,6 +93,7 @@ export default function App() {
         if (cached?.mode === 'browse' || cached?.mode === 'shadow') {
           setMode(cached.mode)
         }
+        // dictationMode 已在 useState 初始化时从 loadSelection 恢复
         const stage = stageKeyOf(book)
         // 恢复小学/初中/高中折叠；当前册学段至少展开
         setOpenStages({ ...(cached?.openStages ?? {}), [stage]: true })
@@ -122,7 +127,7 @@ export default function App() {
     setOpenStages((prev) => (prev[key] ? prev : { ...prev, [key]: true }))
   }, [textbook])
 
-  // 持久化：教材 / 单元 / 学段折叠 / 点读·跟读模式（防抖）
+  // 持久化：教材 / 单元 / 学段折叠 / 点读·跟读 / 默写（防抖）
   useEffect(() => {
     if (!textbookId || loadingBooks) return
     const t = window.setTimeout(() => {
@@ -131,10 +136,11 @@ export default function App() {
         selectedUnits,
         openStages,
         mode,
+        dictationMode,
       })
     }, 250)
     return () => window.clearTimeout(t)
-  }, [textbookId, selectedUnits, openStages, mode, loadingBooks])
+  }, [textbookId, selectedUnits, openStages, mode, dictationMode, loadingBooks])
 
   useEffect(() => {
     const unlock = () => unlockSpeech()
@@ -286,11 +292,29 @@ export default function App() {
           <div className="current-word-panel">
             <div className="idx">
               {status === 'done' ? `完成 ${queueLen} 词` : `第 ${progressText} 词`}
+              {dictationMode && status !== 'done' && (
+                <span className="badge badge-dictation" style={{ marginLeft: '0.4rem' }}>
+                  默写
+                </span>
+              )}
             </div>
-            <div className="en-big">{currentWord?.en ?? (status === 'done' ? '✓' : '…')}</div>
-            <div className="zh-big" style={{ fontSize: '1.1rem', fontWeight: 600 }}>
-              {currentWord?.zh ?? ''}
-            </div>
+            {dictationMode ? (
+              <>
+                <div className="en-big en-big-dictation" aria-label="默写中，英文已隐藏">
+                  {status === 'done' ? '✓' : '？'}
+                </div>
+                <div className="zh-big" style={{ fontSize: '1.15rem', fontWeight: 600 }}>
+                  {currentWord?.zh ?? ''}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="en-big">{currentWord?.en ?? (status === 'done' ? '✓' : '…')}</div>
+                <div className="zh-big" style={{ fontSize: '1.1rem', fontWeight: 600 }}>
+                  {currentWord?.zh ?? ''}
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -451,46 +475,67 @@ export default function App() {
           单词列表
           <span className="badge">{displayWords.length}</span>
           {listShuffled && <span className="badge badge-shuffle">已打乱</span>}
+          {dictationMode && <span className="badge badge-dictation">默写中</span>}
         </h2>
+        <div className="toolbar-inline list-actions">
+          <button
+            type="button"
+            className={`btn btn-sm${dictationMode ? ' btn-primary' : ''}`}
+            onClick={() => setDictationMode((v) => !v)}
+            aria-pressed={dictationMode}
+          >
+            {dictationMode ? '退出默写' : '默写'}
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={shuffleWordList}
+            disabled={displayWords.length < 2 || isPlaying}
+          >
+            打乱单词
+          </button>
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={restoreWordListOrder}
+            disabled={!listShuffled || isPlaying}
+          >
+            恢复顺序
+          </button>
+          <span className="hint">
+            {[
+              dictationMode ? '默写：只显示中文，隐藏英文与音标' : null,
+              displayWords.length === 0
+                ? null
+                : listShuffled
+                  ? '当前为随机顺序'
+                  : '当前为词库顺序',
+              displayWords.length > listVisibleCount
+                ? `显示 ${visibleWords.length}/${displayWords.length}`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </span>
+        </div>
         {displayWords.length === 0 ? (
           <p className="hint">请勾选单元以显示单词。</p>
         ) : (
           <>
-            <div className="toolbar-inline list-actions">
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                onClick={shuffleWordList}
-                disabled={displayWords.length < 2 || isPlaying}
-              >
-                打乱单词
-              </button>
-              <button
-                type="button"
-                className="btn btn-sm"
-                onClick={restoreWordListOrder}
-                disabled={!listShuffled || isPlaying}
-              >
-                恢复顺序
-              </button>
-              <span className="hint">
-                {listShuffled ? '当前为随机顺序' : '当前为词库顺序'}
-                {displayWords.length > listVisibleCount
-                  ? ` · 显示 ${visibleWords.length}/${displayWords.length}`
-                  : ''}
-              </span>
-            </div>
             <div className="word-cards">
               {visibleWords.map((w, i) => {
                 const isCurrent =
                   isPlaying && currentWord && currentWord.en === w.en && currentWord.zh === w.zh
                 return (
-                  <div key={`${w.en}-${w.zh}-${i}`} className={`word-card${isCurrent ? ' current' : ''}`}>
+                  <div
+                    key={`${w.en}-${w.zh}-${i}`}
+                    className={`word-card${isCurrent ? ' current' : ''}`}
+                  >
                     <div className="meta">
                       <div className="idx">#{i + 1}</div>
-                      <div className="en">{w.en}</div>
-                      {w.phonetic && <div className="phonetic">{w.phonetic}</div>}
-                      <div className="zh">{w.zh}</div>
+                      {!dictationMode && <div className="en">{w.en}</div>}
+                      {!dictationMode && w.phonetic && <div className="phonetic">{w.phonetic}</div>}
+                      <div className={`zh${dictationMode ? ' zh-dictation' : ''}`}>{w.zh}</div>
                     </div>
                     <div className="speak-pair">
                       <SpeakButton
@@ -498,6 +543,8 @@ export default function App() {
                         lang="en-US"
                         rate={settings.rate}
                         label="英"
+                        hideTextInTitle={dictationMode}
+                        title={dictationMode ? '听发音（不显示拼写）' : undefined}
                         onError={setError}
                       />
                     </div>
@@ -524,7 +571,16 @@ export default function App() {
           <div className="bottom-bar-inner">
             <div className="mini-status">
               <span>
-                跟读 · <strong>{currentWord?.en ?? (status === 'done' ? '完成' : '…')}</strong>
+                跟读 ·{' '}
+                <strong>
+                  {status === 'done'
+                    ? '完成'
+                    : dictationMode
+                      ? currentWord?.zh
+                        ? `中：${currentWord.zh}`
+                        : '…'
+                      : (currentWord?.en ?? '…')}
+                </strong>
               </span>
               <span>{progressText}</span>
             </div>

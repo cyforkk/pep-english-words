@@ -58,19 +58,48 @@ describe('normalizeSettings / loadSettings', () => {
 })
 
 describe('loadSelection / saveSelection', () => {
-  it('缓存教材、单元、学段折叠、模式', () => {
+  it('缓存教材、单元、学段折叠、模式、默写', () => {
     saveSelection({
       textbookId: 'pep-primary-g3-s1',
       selectedUnits: ['u1', 'u2'],
       openStages: { primary: true, junior: false, senior: true },
       mode: 'shadow',
+      dictationMode: true,
     })
     expect(loadSelection()).toEqual({
       textbookId: 'pep-primary-g3-s1',
       selectedUnits: ['u1', 'u2'],
       openStages: { primary: true, junior: false, senior: true },
       mode: 'shadow',
+      dictationMode: true,
     })
+  })
+
+  it('dictationMode 缺失与脏值归一化为 false', () => {
+    store.set(
+      'le_selection_v1',
+      JSON.stringify({ textbookId: 'a', selectedUnits: [] }),
+    )
+    expect(loadSelection()?.dictationMode).toBe(false)
+
+    store.set(
+      'le_selection_v1',
+      JSON.stringify({ textbookId: 'a', selectedUnits: [], dictationMode: 'true' }),
+    )
+    expect(loadSelection()?.dictationMode).toBe(false)
+
+    store.set(
+      'le_selection_v1',
+      JSON.stringify({ textbookId: 'a', selectedUnits: [], dictationMode: 1 }),
+    )
+    expect(loadSelection()?.dictationMode).toBe(false)
+
+    saveSelection({
+      textbookId: 'a',
+      selectedUnits: [],
+      dictationMode: false,
+    })
+    expect(loadSelection()?.dictationMode).toBe(false)
   })
 
   it('无缓存或非法 textbookId 返回 null', () => {
