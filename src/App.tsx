@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { SpeakButton } from './components/SpeakButton'
+import { WordListItem, type SpellEntry } from './components/WordListItem'
 import { loadCatalogProgressive } from './lib/catalog'
 import { shuffleArray, WordPlayer } from './lib/queue'
 import {
@@ -9,6 +9,7 @@ import {
   saveSelection,
   saveSettings,
 } from './lib/storage'
+import { checkSpelling, listItemSpellKey, wordsContentSig } from './lib/spellCheck'
 import { ensureVoicesLoaded, isMobileClient, unlockSpeech } from './lib/tts'
 import type { PlayMode, PlayerSettings, PlayerStatus, Textbook, Word } from './types/textbook'
 import { DEFAULT_SETTINGS, WORD_LIST_PAGE_SIZE } from './types/textbook'
@@ -28,14 +29,17 @@ export default function App() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [loadWarn, setLoadWarn] = useState<string | null>(null)
   const [loadingBooks, setLoadingBooks] = useState(true)
-  const [listVisibleCount, setListVisibleCount] = useState(WORD_LIST_PAGE_SIZE)
+  const [listVisibleCount, setListVisibleCount] = useState<number>(WORD_LIST_PAGE_SIZE)
   const [openStages, setOpenStages] = useState<Record<string, boolean>>({})
-  /** 默写：隐藏列表英文与音标，仅显示中文释义 */
+  /** 默写：隐藏列表英文与音标，仅显示中文释义；可输入判对错 */
   const [dictationMode, setDictationMode] = useState(
     () => loadSelection()?.dictationMode === true,
   )
+  /** 本页拼写作答（session 内存，不持久化） */
+  const [spellState, setSpellState] = useState<Record<string, SpellEntry>>({})
 
   const playerRef = useRef<WordPlayer | null>(null)
+  const selectedWordsRef = useRef<Word[]>([])
 
   const textbook = catalog.find((b) => b.id === textbookId) ?? null
 
@@ -44,19 +48,76 @@ export default function App() {
     return textbook.units.filter((u) => selectedUnits.includes(u.id)).flatMap((u) => u.words)
   }, [textbook, selectedUnits])
 
+  selectedWordsRef.current = selectedWords
+
+  /** 仅内容变化时同步列表（避免 catalog 渐进加载换引用时误清空打乱/作答） */
+  const selectedWordsSig = useMemo(() => wordsContentSig(selectedWords), [selectedWords])
+
   const [displayWords, setDisplayWords] = useState<Word[]>([])
   const [listShuffled, setListShuffled] = useState(false)
 
   useEffect(() => {
-    setDisplayWords(selectedWords)
+    setDisplayWords(selectedWordsRef.current)
     setListShuffled(false)
     setListVisibleCount(WORD_LIST_PAGE_SIZE)
-  }, [selectedWords])
+  }, [selectedWordsSig])
+
+  // 列表内容或顺序变化时清空作答（含打乱）；引用不变则不清
+  const displayWordsSig = useMemo(() => wordsContentSig(displayWords), [displayWords])
+  useEffect(() => {
+    setSpellState({})
+  }, [displayWordsSig])
+
+  // 退出默写时清空作答
+  useEffect(() => {
+    if (!dictationMode) setSpellState({})
+  }, [dictationMode])
 
   const visibleWords = useMemo(
     () => displayWords.slice(0, listVisibleCount),
     [displayWords, listVisibleCount],
   )
+
+  const spellStats = useMemo(() => {
+    let correct = 0
+    let wrong = 0
+    displayWords.forEach((w, i) => {
+      const r = spellState[listItemSpellKey(i, w.en, w.zh)]?.result
+      if (r === 'correct') correct += 1
+      else if (r === 'wrong') wrong += 1
+    })
+    return { correct, wrong, checked: correct + wrong, total: displayWords.length }
+  }, [displayWords, spellState])
+
+  const setSpellValue = useCallback((key: string, value: string) => {
+    setSpellState((prev) => ({
+      ...prev,
+      [key]: { value, result: 'idle' },
+    }))
+  }, [])
+
+  const checkSpellWord = useCallback((key: string, answerEn: string) => {
+    setSpellState((prev) => {
+      const value = prev[key]?.value ?? ''
+      if (!value.trim()) return prev
+      const ok = checkSpelling(value, answerEn)
+      return {
+        ...prev,
+        [key]: { value, result: ok ? 'correct' : 'wrong' },
+      }
+    })
+  }, [])
+
+  const retrySpellWord = useCallback((key: string) => {
+    setSpellState((prev) => ({
+      ...prev,
+      [key]: { value: '', result: 'idle' },
+    }))
+  }, [])
+
+  const onSpeakError = useCallback((message: string) => {
+    setError(message)
+  }, [])
 
   const shuffleWordList = () => {
     if (selectedWords.length < 2) return
@@ -504,7 +565,10 @@ export default function App() {
           </button>
           <span className="hint">
             {[
-              dictationMode ? '默写：只显示中文，隐藏英文与音标' : null,
+              dictationMode ? '默写：输入英文判对错；只显示中文' : null,
+              dictationMode && spellStats.total > 0
+                ? `已检 ${spellStats.checked} · 对 ${spellStats.correct} · 错 ${spellStats.wrong}`
+                : null,
               displayWords.length === 0
                 ? null
                 : listShuffled
@@ -524,31 +588,26 @@ export default function App() {
           <>
             <div className="word-cards">
               {visibleWords.map((w, i) => {
+                const listIndex = i
+                const sKey = listItemSpellKey(listIndex, w.en, w.zh)
                 const isCurrent =
                   isPlaying && currentWord && currentWord.en === w.en && currentWord.zh === w.zh
                 return (
-                  <div
-                    key={`${w.en}-${w.zh}-${i}`}
-                    className={`word-card${isCurrent ? ' current' : ''}`}
-                  >
-                    <div className="meta">
-                      <div className="idx">#{i + 1}</div>
-                      {!dictationMode && <div className="en">{w.en}</div>}
-                      {!dictationMode && w.phonetic && <div className="phonetic">{w.phonetic}</div>}
-                      <div className={`zh${dictationMode ? ' zh-dictation' : ''}`}>{w.zh}</div>
-                    </div>
-                    <div className="speak-pair">
-                      <SpeakButton
-                        text={w.en}
-                        lang="en-US"
-                        rate={settings.rate}
-                        label="英"
-                        hideTextInTitle={dictationMode}
-                        title={dictationMode ? '听发音（不显示拼写）' : undefined}
-                        onError={setError}
-                      />
-                    </div>
-                  </div>
+                  <WordListItem
+                    key={sKey}
+                    word={w}
+                    index={listIndex}
+                    listIndex={listIndex}
+                    dictationMode={dictationMode}
+                    isCurrent={!!isCurrent}
+                    spellKey={sKey}
+                    spell={spellState[sKey]}
+                    rate={settings.rate}
+                    onSpellChange={setSpellValue}
+                    onSpellCheck={checkSpellWord}
+                    onSpellRetry={retrySpellWord}
+                    onSpeakError={onSpeakError}
+                  />
                 )
               })}
             </div>

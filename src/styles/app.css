@@ -516,6 +516,78 @@ input[type='range'] {
   user-select: none;
 }
 
+/* 默写输入判对错 */
+.word-card.with-spell {
+  align-items: start;
+}
+
+.spell-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.55rem;
+  align-items: center;
+}
+
+.spell-row .spell-btn {
+  min-height: var(--tap);
+  flex-shrink: 0;
+}
+
+.spell-row .spell-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.spell-input {
+  flex: 1 1 8rem;
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 0.45rem 0.65rem;
+  font-size: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  color: #111827;
+}
+
+.spell-input:focus {
+  outline: none;
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 2px #dbeafe;
+}
+
+.spell-input.correct {
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.spell-input.wrong {
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+
+.spell-feedback {
+  margin-top: 0.35rem;
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+.spell-feedback.ok {
+  color: #15803d;
+  font-weight: 600;
+}
+
+.spell-feedback.bad {
+  color: #b91c1c;
+}
+
+.spell-answer {
+  font-weight: 700;
+  color: #991b1b;
+  word-break: break-word;
+}
+
 .word-card .phonetic {
   color: var(--muted);
   font-size: 0.8rem;
